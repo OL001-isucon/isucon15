@@ -1,0 +1,15 @@
+# 当日に HostName を埋める
+Host *
+  User isucon
+  StrictHostKeyChecking accept-new
+  ServerAliveInterval 15
+  ConnectTimeout 10
+
+Host isu1
+  HostName 0.0.0.1
+
+Host isu2
+  HostName 0.0.0.2
+
+Host isu3
+  HostName 0.0.0.3

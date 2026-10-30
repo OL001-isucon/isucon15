@@ -1,0 +1,7 @@
+sort: sum
+reverse: true
+output: count,1xx,2xx,3xx,4xx,5xx,method,uri,min,avg,max,sum,p99
+# ID などが入るパスはここに追記して 1 行にまとめる
+matching_groups:
+  - ^/assets/
+  - ^/images/
