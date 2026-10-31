@@ -214,3 +214,15 @@ CREATE TABLE ip_bans (
   banned_until timestamptz NOT NULL,
   created_at timestamptz NOT NULL DEFAULT clock_timestamp()
 );
+
+-- ベンチの解析で不足が分かったインデックス
+CREATE INDEX realmojis_image_id_reactor_id ON realmojis(image_id, reactor_id);
+CREATE INDEX posts_image_id ON posts(image_id);
+CREATE INDEX friendships_user_high_id ON friendships(user_high_id);
+CREATE INDEX friend_requests_requester_recipient ON friend_requests(requester_id, recipient_id);
+CREATE INDEX friend_requests_recipient_status ON friend_requests(recipient_id, status);
+CREATE INDEX users_username_id ON users(username, id);
+CREATE INDEX login_sessions_token_hash ON login_sessions(token_hash);
+CREATE INDEX login_sessions_user_id ON login_sessions(user_id);
+CREATE INDEX block_relations_blocked_id ON block_relations(blocked_id);
+CREATE INDEX follows_followee_id ON follows(followee_id);
