@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ベンチの計測を準備し、ポータルで負荷走行が始まったら計測して、終了後に全リージョン分を解析する
-# ログを空にしてから /initialize を検知するまで待つので、ボタンは「準備完了」の表示後に押す
+# ログを空にしてから /initialize を検知するまで待つ。.portal-auth があればベンチも自動で依頼する
 # usage: scripts/bench.sh [メモ]
 if [ "${1:-}" = "-s" ]; then
   echo "ベンチは常に全リージョンへ流れるので -s は指定できません" >&2
@@ -104,7 +104,10 @@ collect() {
 run_parallel truncate_log "${APP_HOSTS[@]}"
 reset_db_stats
 
-echo ">>> 準備完了。ポータルからベンチを実行してください"
+echo ">>> 準備完了"
+if ! bash "$ROOT/scripts/request-bench.sh"; then
+  echo ">>> ポータルからベンチを実行してください"
+fi
 
 # /initialize がどのリージョンへ届いても検知できるように全台を見る
 deadline=$((SECONDS + WAIT_START_SECONDS))

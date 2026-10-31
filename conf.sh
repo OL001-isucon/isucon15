@@ -49,3 +49,7 @@ PULL_EXCLUDES=(
   'webapp/ruby/*'
   'webapp/rust/*'
 )
+
+# ポータルの負荷走行の依頼。.portal-auth が無ければボタンを手で押す
+PORTAL_URL=https://portal.isucon.net
+PORTAL_BENCH_BODY='\x20\x28'
