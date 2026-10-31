@@ -25,10 +25,11 @@ ACCESS_LOG=/var/log/nginx/access_ltsv.log
 
 # ベンチ開始の検知に使う文字列。nginx はレスポンス完了時に記録するので、負荷が始まる直前に一致する
 START_PATTERN=/initialize
-# ボタンを押すまで待つ秒数 / ログが止まってから終了と判定する秒数 / CPU プロファイルの秒数
+# ボタンを押すまで待つ秒数 / ログが止まってから終了と判定する秒数 / CPU プロファイルの秒数 / DB の CPU・IO・待ちを記録する秒数
 WAIT_START_SECONDS=1800
 QUIET_SECONDS=20
 PPROF_SECONDS=60
+DB_METRICS_SECONDS=90
 
 # ベンチ結果の issue を作るリポジトリ
 GITHUB_REPO=OL001-isucon/isucon15

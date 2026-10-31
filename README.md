@@ -53,9 +53,11 @@ bash scripts/deploy.sh origin/feature-x   # ブランチ名を省略すると or
 bash scripts/bench.sh "何を変えたか"       # 「準備完了」が出てからポータルでベンチを実行する
 ```
 
-`bench.sh` はベンチの開始を検知して 3 台の CPU プロファイルを取り、終了後に alp(台ごと)/ pg_stat_statements / pprof(台ごと)の結果を `results/<日時>/` に保存する。`gh` があれば `[bench]` issue を作る。スコアは issue に追記する。
+`bench.sh` はベンチの開始を検知して 3 台の CPU プロファイルと asia2 の CPU / IO / 待ち状態を取り、終了後に alp(台ごと)/ DB の要約 / pg_stat_statements / pprof(台ごと)の結果を `results/<日時>/` に保存する。`gh` があれば `[bench]` issue を作る。スコアは issue に追記する。
 
 `pg_stat_statements` の時間は DB 内の処理時間だけで、europe1 / america1 からの往復約 100ms は含まない。**実行回数の順も見る。**
+
+「DB」の要約は、DB が CPU、IO、ロックのどれで詰まっているかを見るためのもの。`pg_stat_statements` の上位が `FOR UPDATE` や `LOCK TABLE` で、待ちの `Lock` が多ければロック待ちなので、インデックスではなくトランザクションを短くする。1 秒ごとの生データは `db-vmstat.txt` と `db-waits.txt`。
 
 ## 1 台だけ操作する
 
