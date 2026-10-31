@@ -34,7 +34,6 @@ func NewServer(config *Config) *echo.Echo {
 	if err != nil {
 		panic("failed to open database: " + err.Error())
 	}
-	db.SetMaxOpenConns(30)
 	// localhost:6060/debug/vars で接続プールの待ちを確認する
 	expvar.Publish("db_stats", expvar.Func(func() any { return db.Stats() }))
 	err = db.Ping()
