@@ -50,7 +50,7 @@
 git switch -c feature-x          # issue ごとにブランチを切る
 # 修正して push
 bash scripts/deploy.sh origin/feature-x   # ブランチ名を省略すると origin/main。アプリ 3 台へ並列で配置する
-bash scripts/bench.sh "何を変えたか"       # 「準備完了」が出てからポータルでベンチを実行する
+bash scripts/bench.sh "何を変えたか"       # .portal-auth があれば自動で依頼する。無ければ「準備完了」の後にポータルで実行する
 ```
 
 `bench.sh` はベンチの開始を検知して 3 台の CPU プロファイルと asia2 の CPU / IO / 待ち状態を取り、終了後に alp(台ごと)/ DB の要約 / pg_stat_statements / pprof(台ごと)の結果を `results/<日時>/` に保存する。`gh` があれば `[bench]` issue を作る。スコアは issue に追記する。
@@ -58,6 +58,17 @@ bash scripts/bench.sh "何を変えたか"       # 「準備完了」が出て�
 `pg_stat_statements` の時間は DB 内の処理時間だけで、europe1 / america1 からの往復約 100ms は含まない。**実行回数の順も見る。**
 
 「DB」の要約は、DB が CPU、IO、ロックのどれで詰まっているかを見るためのもの。`pg_stat_statements` の上位が `FOR UPDATE` や `LOCK TABLE` で、待ちの `Lock` が多ければロック待ちなので、インデックスではなくトランザクションを短くする。1 秒ごとの生データは `db-vmstat.txt` と `db-waits.txt`。
+
+## ベンチの自動依頼
+
+`bench.sh` は「準備完了」のあと、`.portal-auth` があればポータルへベンチを依頼する。このファイルはコミットしない。ブラウザの Copy as cURL から Cookie と `x-csrf-token` を取り出して、手元に置く。
+
+```bash
+PORTAL_COOKIE='csrftoken=...; isuxportal_session=...'
+PORTAL_CSRF_TOKEN='...'
+```
+
+依頼に失敗したときは理由を表示して待機を続けるので、ポータルで手動実行できる。別のメンバーのベンチが走っていると依頼は断られる。
 
 ## 1 台だけ操作する
 
