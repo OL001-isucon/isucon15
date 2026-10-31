@@ -45,5 +45,9 @@ if [ "${1:-}" = "-s" ]; then
     *" ${HOSTS[0]} "*) APP_HOSTS=("${HOSTS[0]}") ;;
     *) APP_HOSTS=() ;;
   esac
+  case " ${WEB_HOSTS[*]} " in
+    *" ${HOSTS[0]} "*) WEB_HOSTS=("${HOSTS[0]}") ;;
+    *) WEB_HOSTS=() ;;
+  esac
   shift 2
 fi

@@ -29,10 +29,18 @@ const (
 )
 
 // private IP の経路はルーターを通る。公開 IP はルーターを迂回するので使わない
-var regionHosts = map[string]string{
+var nodeHosts = map[string]string{
 	"asia":    "192.168.1.10",
+	"asia2":   "192.168.4.10",
 	"europe":  "192.168.2.10",
 	"america": "192.168.3.10",
+}
+
+// リージョンごとのサーバー。通知の接続はリージョンのどのサーバーにもある
+var regionNodes = map[string][]string{
+	"asia":    {"asia", "asia2"},
+	"europe":  {"europe"},
+	"america": {"america"},
 }
 
 // ImageStore は画像の本体をリージョンごとのディスクに置く。
@@ -40,7 +48,7 @@ var regionHosts = map[string]string{
 // cache/ は DB に本体がある初期画像の控えで、中身が変わらないので初期化でも残す。
 type ImageStore struct {
 	root   string
-	region string
+	node   string
 	token  string
 	client *http.Client
 }
@@ -48,9 +56,9 @@ type ImageStore struct {
 func NewImageStore(config *Config) *ImageStore {
 	hash := sha256.Sum256([]byte("isureal-internal:" + config.DBPassword))
 	return &ImageStore{
-		root:   config.ImageDir,
-		region: config.Region,
-		token:  hex.EncodeToString(hash[:]),
+		root:  config.ImageDir,
+		node:  config.Node,
+		token: hex.EncodeToString(hash[:]),
 		client: &http.Client{
 			Timeout:   imageTransferTimeout,
 			Transport: &http.Transport{MaxIdleConnsPerHost: 16, IdleConnTimeout: 90 * time.Second},
@@ -107,7 +115,7 @@ func (s *ImageStore) LoadNew(ctx context.Context, imageID string, originRegion *
 	if !errors.Is(err, fs.ErrNotExist) {
 		return nil, err
 	}
-	if originRegion == nil || *originRegion == s.region {
+	if originRegion == nil || *originRegion == s.node {
 		return nil, fmt.Errorf("image %s is missing", imageID)
 	}
 	data, err = s.fetchFromRegion(ctx, *originRegion, imageID)
@@ -132,16 +140,16 @@ func (s *ImageStore) SaveCached(imageID string, data []byte) {
 	}
 }
 
-func (s *ImageStore) regionURL(region, path string) (string, error) {
-	host, ok := regionHosts[region]
+func (s *ImageStore) nodeURL(node, path string) (string, error) {
+	host, ok := nodeHosts[node]
 	if !ok {
-		return "", fmt.Errorf("unknown region: %s", region)
+		return "", fmt.Errorf("unknown node: %s", node)
 	}
 	return "http://" + host + ":8080" + path, nil
 }
 
-func (s *ImageStore) internalRequest(ctx context.Context, method, region, path string, body []byte) (*http.Response, error) {
-	url, err := s.regionURL(region, path)
+func (s *ImageStore) internalRequest(ctx context.Context, method, node, path string, body []byte) (*http.Response, error) {
+	url, err := s.nodeURL(node, path)
 	if err != nil {
 		return nil, err
 	}
@@ -153,30 +161,30 @@ func (s *ImageStore) internalRequest(ctx context.Context, method, region, path s
 	return s.client.Do(req)
 }
 
-func (s *ImageStore) fetchFromRegion(ctx context.Context, region, imageID string) ([]byte, error) {
-	res, err := s.internalRequest(ctx, http.MethodGet, region, "/internal/images/"+imageID, nil)
+func (s *ImageStore) fetchFromRegion(ctx context.Context, node, imageID string) ([]byte, error) {
+	res, err := s.internalRequest(ctx, http.MethodGet, node, "/internal/images/"+imageID, nil)
 	if err != nil {
 		return nil, err
 	}
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failed to fetch image %s from %s: %s", imageID, region, res.Status)
+		return nil, fmt.Errorf("failed to fetch image %s from %s: %s", imageID, node, res.Status)
 	}
 	return io.ReadAll(res.Body)
 }
 
 // Distribute は裏で他のリージョンへ配る。失敗しても読み取り時に保存元から取得できる
 func (s *ImageStore) Distribute(imageID string, data []byte) {
-	for region := range regionHosts {
-		if region == s.region {
+	for node := range nodeHosts {
+		if node == s.node {
 			continue
 		}
 		go func() {
 			ctx, cancel := context.WithTimeout(context.Background(), imageTransferTimeout)
 			defer cancel()
-			res, err := s.internalRequest(ctx, http.MethodPut, region, "/internal/images/"+imageID, data)
+			res, err := s.internalRequest(ctx, http.MethodPut, node, "/internal/images/"+imageID, data)
 			if err != nil {
-				log.Printf("failed to distribute image %s to %s: %v", imageID, region, err)
+				log.Printf("failed to distribute image %s to %s: %v", imageID, node, err)
 				return
 			}
 			io.Copy(io.Discard, res.Body)
@@ -211,16 +219,16 @@ func (s *ImageStore) ClearNewInAllRegions() {
 	ctx, cancel := context.WithTimeout(context.Background(), imageResetTimeout)
 	defer cancel()
 	var wg sync.WaitGroup
-	for region := range regionHosts {
-		if region == s.region {
+	for node := range nodeHosts {
+		if node == s.node {
 			continue
 		}
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			res, err := s.internalRequest(ctx, http.MethodPost, region, "/internal/images-reset", nil)
+			res, err := s.internalRequest(ctx, http.MethodPost, node, "/internal/images-reset", nil)
 			if err != nil {
-				log.Printf("failed to clear images in %s: %v", region, err)
+				log.Printf("failed to clear images in %s: %v", node, err)
 				return
 			}
 			res.Body.Close()

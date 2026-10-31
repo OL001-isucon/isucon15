@@ -34,22 +34,24 @@ func (h *NotificationHub) Wake() {
 	h.changed = make(chan struct{})
 }
 
-// wakeNotifications は指定のリージョンの接続を起こす。届かなくても定期の確認で拾える
+// wakeNotifications は指定のリージョンの全サーバーの接続を起こす。届かなくても定期の確認で拾える
 func (h *HandlerContext) wakeNotifications(region string) {
-	if region == h.Config.Region {
-		h.Notifications.Wake()
-		return
-	}
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), imageTransferTimeout)
-		defer cancel()
-		res, err := h.Images.internalRequest(ctx, http.MethodPost, region, "/internal/notifications-wake", nil)
-		if err != nil {
-			log.Printf("failed to wake notifications in %s: %v", region, err)
-			return
+	for _, node := range regionNodes[region] {
+		if node == h.Config.Node {
+			h.Notifications.Wake()
+			continue
 		}
-		res.Body.Close()
-	}()
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), imageTransferTimeout)
+			defer cancel()
+			res, err := h.Images.internalRequest(ctx, http.MethodPost, node, "/internal/notifications-wake", nil)
+			if err != nil {
+				log.Printf("failed to wake notifications in %s: %v", node, err)
+				return
+			}
+			res.Body.Close()
+		}()
+	}
 }
 
 func wakeInternalNotificationsHandler(h *HandlerContext) echo.HandlerFunc {

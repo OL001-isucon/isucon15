@@ -3,8 +3,11 @@
 # ssh_config の Host 名。router はログイン禁止なので入れない
 HOSTS=(asia1 europe1 america1 asia2)
 
-# 役割。ベンチは常に 3 リージョンへ流れるので、アプリと nginx は全台を揃える
-APP_HOSTS=(asia1 europe1 america1)
+# 役割。ベンチは常に 3 リージョンへ流れるので、アプリは全台を揃える
+# asia2 はルーターから直接届かないので、asia1 の nginx が振り分ける
+WEB_HOSTS=(asia1 europe1 america1)
+APP_HOSTS=(asia1 europe1 america1 asia2)
+GUARD_SERVICE=isureal-guard.service
 DB_HOST=asia2
 
 # アプリ
