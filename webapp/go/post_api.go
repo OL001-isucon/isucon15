@@ -131,7 +131,7 @@ func createPostHandler(h *HandlerContext) echo.HandlerFunc {
 		if counts.Active != 0 || counts.Deleted >= 2 || postedAt.Before(window.StartsAt) {
 			return NewAPIError(http.StatusConflict, "post_slot_unavailable")
 		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO image_objects (id, owner_user_id, origin_region, media_type, created_at) VALUES ($1, $2, $3, 'image/jpeg', $4)`, imageID, userID, h.Config.Region, postedAt); err != nil {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO image_objects (id, owner_user_id, origin_region, media_type, created_at) VALUES ($1, $2, $3, 'image/jpeg', $4)`, imageID, userID, h.Config.Node, postedAt); err != nil {
 			return err
 		}
 		postID := uuid.NewString()

@@ -7,8 +7,10 @@
 | サーバ | 役割 |
 |---|---|
 | asia1 / europe1 / america1 | nginx + Go アプリ |
-| asia2 | 共有 PostgreSQL 16 |
+| asia2 | 共有 PostgreSQL 16 + Go アプリ(asia1 の nginx から振り分け) |
 | ルーター | 国別の転送、遅延と帯域の制限。**ログイン禁止** |
+
+ルーターは asia2 へ転送しないので、asia1 の nginx が `X-Client-IP` のハッシュで asia1 と asia2 に 3:1 で振り分ける。asia2 は DB を優先するので少なくしている。同じ接続元は同じサーバーへ送るので、不正アクセスの判定が分散しない。
 
 ベンチは常にルーター経由で 3 リージョンへ流れ、チームで同時に 1 本だけ走る。対象サーバーは選べないので、アプリは全台を同じ版に揃えて計測する。
 
@@ -101,7 +103,7 @@ ALTER TABLE posts ADD COLUMN IF NOT EXISTS like_count integer NOT NULL DEFAULT 0
 
 初期画像は DB の `image_objects.data` にある。一度読むと、そのサーバーの `/home/isucon/image-cache/cache/` に控えを置く。
 
-新規の画像は `data` が NULL で、本体は受けたサーバーの `/home/isucon/image-cache/new/` に置く。コミット後に他のリージョンへ配り、届いていないときは `origin_region` のサーバーから取得する。`new/` は初期化で全リージョンから消える。
+新規の画像は `data` が NULL で、本体は受けたサーバーの `/home/isucon/image-cache/new/` に置く。コミット後に他のリージョンへ配り、届いていないときは `origin_region` のサーバーから取得する。asia2 の画像は `origin_region` が `asia2` になる。`new/` は初期化で全リージョンから消える。
 
 権限と削除の確認は毎回 DB で行う。サーバー間の通信は private IP の `:8080` の `/internal/` を使う。公開 IP はルーターを迂回するので使わない。
 

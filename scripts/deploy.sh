@@ -19,6 +19,10 @@ git archive "$ref" "$APP_DIR" "$SQL_DIR" > "$archive"
 
 build_app() {
   local host=$1
+  # asia2 のリージョンは asia なので、画像の保存元や起こす先を区別する名前を持たせる
+  if [ "$host" = asia2 ]; then
+    on "$host" "grep -q '^ISUREAL_NODE=' ~/env.sh || echo ISUREAL_NODE=asia2 >> ~/env.sh"
+  fi
   # 削除したファイルが残るとビルドが壊れるので、配置前に Go のソースを消す
   on "$host" "find $APP_DIR -name '*.go' -delete"
   on "$host" "tar xf -" < "$archive"
@@ -36,7 +40,8 @@ apply_config() {
 }
 
 restart_app() {
-  on "$1" "sudo systemctl restart $APP_SERVICE"
+  # asia2 は初期状態でアプリと監視が止まっている。再起動後の追試でも動くよう自動起動にする
+  on "$1" "sudo systemctl enable -q $APP_SERVICE $GUARD_SERVICE && sudo systemctl restart $APP_SERVICE && sudo systemctl start $GUARD_SERVICE"
 }
 
 [ "${#APP_HOSTS[@]}" -eq 0 ] || run_parallel build_app "${APP_HOSTS[@]}"
