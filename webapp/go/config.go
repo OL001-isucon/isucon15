@@ -14,12 +14,16 @@ type Config struct {
 	DBPassword string
 	DBName     string
 	LogLevel   string
+	Node       string
 	ImageDir   string
 }
 
 func ConfigFromEnv() *Config {
+	region := envOrDefault("ISUREAL_REGION", "asia")
 	return &Config{
-		Region:     envOrDefault("ISUREAL_REGION", "asia"),
+		Region: region,
+		// サーバーの名前。asia2 はリージョンが asia なので、別の名前を持つ
+		Node:       envOrDefault("ISUREAL_NODE", region),
 		DBHost:     envOrDefault("ISUREAL_DB_HOST", "127.0.0.1"),
 		DBPort:     envOrDefault("ISUREAL_DB_PORT", "5432"),
 		DBUser:     envOrDefault("ISUREAL_DB_USER", "isureal"),

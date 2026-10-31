@@ -102,7 +102,7 @@ func replaceRealMojiHandler(h *HandlerContext) echo.HandlerFunc {
 		}
 		defer tx.Rollback()
 		// 画像の行は users 行と競合しないので、ロックの前に入れておく (失敗時は tx ごと戻る)
-		if _, err := tx.ExecContext(ctx, `INSERT INTO image_objects(id,owner_user_id,origin_region,media_type) VALUES($1,$2,$3,'image/jpeg')`, imageID, actor, h.Config.Region); err != nil {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO image_objects(id,owner_user_id,origin_region,media_type) VALUES($1,$2,$3,'image/jpeg')`, imageID, actor, h.Config.Node); err != nil {
 			return err
 		}
 		// 投稿者や自分の users 行ではなく投稿の行を共有ロックし、同じ投稿への自分の送信だけを advisory lock で直列にする。
