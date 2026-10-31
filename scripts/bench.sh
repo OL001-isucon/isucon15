@@ -63,6 +63,8 @@ collect_db() {
   on "${APP_HOSTS[0]}" "cat /tmp/pool-metrics.txt 2>/dev/null" > "$dir/pool-metrics.txt" || true
   on "${APP_HOSTS[0]}" "cat /tmp/pool-ping.txt 2>/dev/null" > "$dir/pool-ping.txt" || true
   on "${APP_HOSTS[0]}" "cat /tmp/pool-vmstat.txt 2>/dev/null" > "$dir/pool-vmstat.txt" || true
+  on "${APP_HOSTS[0]}" "cat /tmp/listen-queue.txt 2>/dev/null" > "$dir/listen-queue.txt" || true
+  on "${APP_HOSTS[0]}" "cat /tmp/listen-drops.txt 2>/dev/null" > "$dir/listen-drops.txt" || true
   {
     if [ -s "$dir/db-vmstat.txt" ]; then
       # 列名から位置を引く。vmstat の 1 行目は起動からの平均なので飛ばす
