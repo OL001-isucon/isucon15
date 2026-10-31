@@ -17,7 +17,8 @@ const imageURLLifetime = 24 * time.Hour
 const imageSignatureIterations = 1000
 
 // exp を切り上げて同じ画像の署名を使い回す。寿命は 24 時間を下回らない
-const imageURLExpStepSeconds = 600
+// ベンチは期限の範囲を検証する。10 分の切り上げは「有効期限が範囲外」で FAIL した
+const imageURLExpStepSeconds = 60
 
 // 署名を保持する exp の数。古いものは計算し直せばよいので捨てる
 const imageSignatureCacheBuckets = 16
