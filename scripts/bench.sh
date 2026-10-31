@@ -42,6 +42,15 @@ take_pool_metrics() {
   on "$1" "bash -s $DB_METRICS_SECONDS" < "$ROOT/remote/pool-metrics.sh"
 }
 
+# 負荷の最中に、どこで止まっている goroutine が多いかを記録する。接続を借りたままの処理を探すため
+take_goroutine_dumps() {
+  local host=$1 i
+  for i in 1 2 3; do
+    sleep "$GOROUTINE_DUMP_INTERVAL_SECONDS"
+    on "$host" "curl -fsS -m 10 'http://localhost:6060/debug/pprof/goroutine?debug=1'" > "$dir/goroutine-$host-$i.txt" || true
+  done
+}
+
 take_db_metrics() {
   on "$DB_HOST" "sudo DB_NAME=$DB_NAME bash -s $DB_METRICS_SECONDS" < "$ROOT/remote/db-metrics.sh"
 }
@@ -141,6 +150,8 @@ for host in "${APP_HOSTS[@]}"; do
   take_profile "$host" > /dev/null 2>&1 &
   pprof_pids+=($!)
 done
+take_goroutine_dumps "${APP_HOSTS[0]}" > /dev/null 2>&1 &
+pprof_pids+=($!)
 take_pool_metrics "${APP_HOSTS[0]}" > /dev/null 2>&1 &
 pprof_pids+=($!)
 take_db_metrics > /dev/null 2>&1 &
