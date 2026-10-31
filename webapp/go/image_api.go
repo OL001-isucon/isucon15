@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/labstack/echo/v5"
@@ -18,6 +19,51 @@ type getImageRequest struct {
 	ImageID string `param:"imageId" json:"-"`
 	Exp     string `query:"exp" json:"-"`
 	Sig     string `query:"sig" json:"-"`
+}
+
+type imageObject struct {
+	SecretKeyHash string    `db:"secret_key_hash"`
+	MediaType     string    `db:"media_type"`
+	OriginRegion  *string   `db:"origin_region"`
+	OnDisk        bool      `db:"on_disk"`
+	CreatedAt     time.Time `db:"created_at"`
+	Available     bool      `db:"available"`
+}
+
+// 削除した画像は削除後 5 秒以内なら返してよい (マニュアル) ので、鍵と有効性を 2 秒だけ使い回す。
+// 見つからなかった結果は持たない
+const imageObjectCacheTTL = 2 * time.Second
+const imageObjectCacheMaxEntries = 100000
+
+type imageObjectCache struct {
+	mu      sync.RWMutex
+	entries map[string]imageObjectEntry
+}
+
+type imageObjectEntry struct {
+	object    imageObject
+	fetchedAt time.Time
+}
+
+var imageObjects = &imageObjectCache{entries: map[string]imageObjectEntry{}}
+
+func (c *imageObjectCache) get(imageID string) (imageObject, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	entry, ok := c.entries[imageID]
+	if !ok || time.Since(entry.fetchedAt) >= imageObjectCacheTTL {
+		return imageObject{}, false
+	}
+	return entry.object, true
+}
+
+func (c *imageObjectCache) put(imageID string, object imageObject) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if len(c.entries) >= imageObjectCacheMaxEntries {
+		c.entries = map[string]imageObjectEntry{}
+	}
+	c.entries[imageID] = imageObjectEntry{object: object, fetchedAt: time.Now()}
 }
 
 func getImageHandler(h *HandlerContext) echo.HandlerFunc {
@@ -43,15 +89,9 @@ func getImageHandler(h *HandlerContext) echo.HandlerFunc {
 		// 削除状態を毎回確認する。即時反映も5秒以内の許容範囲に含まれる。
 		// リージョン間は 1 往復 100ms なので、鍵と削除状態を 1 回で取得する。本体は読まない
 		ctx := c.Request().Context()
-		var object struct {
-			SecretKeyHash string    `db:"secret_key_hash"`
-			MediaType     string    `db:"media_type"`
-			OriginRegion  *string   `db:"origin_region"`
-			OnDisk        bool      `db:"on_disk"`
-			CreatedAt     time.Time `db:"created_at"`
-			Available     bool      `db:"available"`
-		}
-		err = h.DB.GetContext(ctx, &object, `
+		object, cached := imageObjects.get(input.ImageID)
+		if !cached {
+			err = h.DB.GetContext(ctx, &object, `
    SELECT u.secret_key_hash, i.media_type, i.origin_region, i.on_disk, i.created_at,
      COALESCE(u.profile_image_id = i.id, false)
      OR EXISTS (
@@ -67,11 +107,13 @@ func getImageHandler(h *HandlerContext) echo.HandlerFunc {
    FROM image_meta i JOIN users u ON u.id = i.owner_user_id
    WHERE i.id = $1 AND u.status = 'active'
   `, input.ImageID)
-		if errors.Is(err, sql.ErrNoRows) {
-			return NewAPIError(http.StatusForbidden, "image_forbidden")
-		}
-		if err != nil {
-			return err
+			if errors.Is(err, sql.ErrNoRows) {
+				return NewAPIError(http.StatusForbidden, "image_forbidden")
+			}
+			if err != nil {
+				return err
+			}
+			imageObjects.put(input.ImageID, object)
 		}
 		key, err := imageSigningKey(object.SecretKeyHash)
 		if err != nil {
