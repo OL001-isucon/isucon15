@@ -34,6 +34,7 @@ func deleteAccountHandler(h *HandlerContext) echo.HandlerFunc {
 		if err := tx.Commit(); err != nil {
 			return err
 		}
+		sessions.forgetUser(userID)
 		// 退会したユーザーの通知の接続を閉じる
 		h.wakeNotifications(GetSession(c).Region)
 		return c.NoContent(http.StatusNoContent)
