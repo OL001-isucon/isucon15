@@ -1,6 +1,7 @@
 package isureal
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"database/sql"
@@ -40,38 +41,19 @@ func getImageHandler(h *HandlerContext) echo.HandlerFunc {
 			return NewAPIError(http.StatusForbidden, "image_forbidden")
 		}
 
-		ctx := c.Request().Context()
-		var secretKeyHash string
-		err = h.DB.GetContext(ctx, &secretKeyHash, `
-   SELECT u.secret_key_hash
-   FROM image_objects i JOIN users u ON u.id = i.owner_user_id
-   WHERE i.id = $1 AND u.status = 'active'
-  `, input.ImageID)
-		if errors.Is(err, sql.ErrNoRows) {
-			return NewAPIError(http.StatusForbidden, "image_forbidden")
-		}
-		if err != nil {
-			return err
-		}
-		key, err := imageSigningKey(secretKeyHash)
-		if err != nil {
-			return err
-		}
-		if !hmac.Equal(sig, imageSignature(key, input.ImageID, exp)) {
-			c.Set("abuse", "invalid_signature")
-			return NewAPIError(http.StatusForbidden, "image_forbidden")
-		}
-
 		// 削除状態を毎回確認する。即時反映も5秒以内の許容範囲に含まれる。
+		// リージョン間は 1 往復 100ms なので、鍵と削除状態を 1 回で取得する。本体は読まない
+		ctx := c.Request().Context()
 		var object struct {
-			Data      []byte `db:"data"`
-			MediaType string `db:"media_type"`
+			SecretKeyHash string  `db:"secret_key_hash"`
+			MediaType     string  `db:"media_type"`
+			OriginRegion  *string `db:"origin_region"`
+			OnDisk        bool    `db:"on_disk"`
+			Available     bool    `db:"available"`
 		}
 		err = h.DB.GetContext(ctx, &object, `
-   SELECT i.data, i.media_type
-   FROM image_objects i JOIN users u ON u.id = i.owner_user_id AND u.status = 'active'
-   WHERE i.id = $1 AND (
-     u.profile_image_id = i.id
+   SELECT u.secret_key_hash, i.media_type, i.origin_region, i.data IS NULL AS on_disk,
+     COALESCE(u.profile_image_id = i.id, false)
      OR EXISTS (
        SELECT 1 FROM posts p
        WHERE p.image_id = i.id AND p.author_id = u.id AND p.deleted_at IS NULL
@@ -81,8 +63,9 @@ func getImageHandler(h *HandlerContext) echo.HandlerFunc {
        JOIN posts p ON p.id = r.post_id AND p.deleted_at IS NULL
        JOIN users author ON author.id = p.author_id AND author.status = 'active'
        WHERE r.image_id = i.id AND r.reactor_id = u.id AND r.replaced_at IS NULL AND r.deleted_at IS NULL
-     )
-   )
+     ) AS available
+   FROM image_objects i JOIN users u ON u.id = i.owner_user_id
+   WHERE i.id = $1 AND u.status = 'active'
   `, input.ImageID)
 		if errors.Is(err, sql.ErrNoRows) {
 			return NewAPIError(http.StatusForbidden, "image_forbidden")
@@ -90,9 +73,40 @@ func getImageHandler(h *HandlerContext) echo.HandlerFunc {
 		if err != nil {
 			return err
 		}
-		if exp <= time.Now().Unix() {
+		key, err := imageSigningKey(object.SecretKeyHash)
+		if err != nil {
+			return err
+		}
+		if !hmac.Equal(sig, imageSignature(key, input.ImageID, exp)) {
+			c.Set("abuse", "invalid_signature")
 			return NewAPIError(http.StatusForbidden, "image_forbidden")
 		}
-		return c.Blob(http.StatusOK, object.MediaType, object.Data)
+		if !object.Available || exp <= time.Now().Unix() {
+			return NewAPIError(http.StatusForbidden, "image_forbidden")
+		}
+
+		var data []byte
+		if object.OnDisk {
+			data, err = h.Images.LoadNew(ctx, input.ImageID, object.OriginRegion)
+		} else {
+			data, err = loadInitialImage(ctx, h, input.ImageID)
+		}
+		if err != nil {
+			return err
+		}
+		return c.Blob(http.StatusOK, object.MediaType, data)
 	}
+}
+
+// 初期画像は中身が変わらないので、一度読んだら手元の控えから返す
+func loadInitialImage(ctx context.Context, h *HandlerContext, imageID string) ([]byte, error) {
+	if data, ok := h.Images.LoadCached(imageID); ok {
+		return data, nil
+	}
+	var data []byte
+	if err := h.DB.GetContext(ctx, &data, `SELECT data FROM image_objects WHERE id = $1`, imageID); err != nil {
+		return nil, err
+	}
+	h.Images.SaveCached(imageID, data)
+	return data, nil
 }

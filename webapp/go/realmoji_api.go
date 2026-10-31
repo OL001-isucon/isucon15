@@ -75,6 +75,10 @@ func replaceRealMojiHandler(h *HandlerContext) echo.HandlerFunc {
 		if actor == post.AuthorID {
 			return NewAPIError(http.StatusForbidden, "interaction_forbidden")
 		}
+		imageID := uuid.NewString()
+		if err := h.Images.SaveNew(imageID, data); err != nil {
+			return err
+		}
 		tx, err := beginRelationshipTx(ctx, h.DB, actor, post.AuthorID)
 		if err != nil {
 			return err
@@ -90,8 +94,7 @@ func replaceRealMojiHandler(h *HandlerContext) echo.HandlerFunc {
 		if _, err := tx.ExecContext(ctx, `UPDATE realmojis SET replaced_at=clock_timestamp() WHERE post_id=$1 AND reactor_id=$2 AND replaced_at IS NULL AND deleted_at IS NULL`, post.ID, actor); err != nil {
 			return err
 		}
-		imageID := uuid.NewString()
-		if _, err := tx.ExecContext(ctx, `INSERT INTO image_objects(id,owner_user_id,data,media_type) VALUES($1,$2,$3,'image/jpeg')`, imageID, actor, data); err != nil {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO image_objects(id,owner_user_id,origin_region,media_type) VALUES($1,$2,$3,'image/jpeg')`, imageID, actor, h.Config.Region); err != nil {
 			return err
 		}
 		id := uuid.NewString()
@@ -109,6 +112,7 @@ func replaceRealMojiHandler(h *HandlerContext) echo.HandlerFunc {
 		if err := tx.Commit(); err != nil {
 			return err
 		}
+		h.Images.Distribute(imageID, data)
 		return c.JSON(http.StatusCreated, newRealMojiResponse(reaction, user))
 	}
 }

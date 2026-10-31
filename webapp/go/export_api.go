@@ -25,10 +25,11 @@ func exportPostsHandler(h *HandlerContext) echo.HandlerFunc {
 		}
 		var posts []struct {
 			Post
-			ImageData []byte `db:"image_data"`
+			ImageData    []byte  `db:"image_data"`
+			OriginRegion *string `db:"origin_region"`
 		}
 		if err := h.DB.SelectContext(ctx, &posts, `
-   SELECT `+postColumns+`, i.data AS image_data
+   SELECT `+postColumns+`, i.data AS image_data, i.origin_region
    FROM posts p
    JOIN posting_windows w ON w.id = p.posting_window_id
    JOIN image_objects i ON i.id = p.image_id
@@ -43,12 +44,19 @@ func exportPostsHandler(h *HandlerContext) echo.HandlerFunc {
 		defer writer.Close()
 		items := make([]exportPostResponse, 0, len(posts))
 		for _, post := range posts {
+			imageData := post.ImageData
+			if imageData == nil {
+				imageData, err = h.Images.LoadNew(ctx, post.ImageID, post.OriginRegion)
+				if err != nil {
+					return err
+				}
+			}
 			imagePath := fmt.Sprintf("images/%06d.jpg", len(items)+1)
 			image, err := writer.CreateHeader(&zip.FileHeader{Name: imagePath, Method: zip.Store})
 			if err != nil {
 				return err
 			}
-			if _, err := image.Write(post.ImageData); err != nil {
+			if _, err := image.Write(imageData); err != nil {
 				return err
 			}
 			items = append(items, exportPostResponse{createPostResponse: newPostResponse(post.Post, author), ImagePath: imagePath})
