@@ -10,6 +10,7 @@ cd "$work"
 
 nginx_changed=false
 postgres_changed=false
+journald_changed=false
 
 while IFS= read -r file; do
   target=/$file
@@ -20,6 +21,7 @@ while IFS= read -r file; do
   case "$target" in
     /etc/nginx/*) nginx_changed=true ;;
     /etc/postgresql/*) postgres_changed=true ;;
+    /etc/systemd/journald.conf.d/*) journald_changed=true ;;
   esac
 done < <(find etc -type f)
 
@@ -30,4 +32,7 @@ if [ "$nginx_changed" = true ]; then
 fi
 if [ "$postgres_changed" = true ]; then
   systemctl restart postgresql@16-main
+fi
+if [ "$journald_changed" = true ]; then
+  systemctl restart systemd-journald
 fi
