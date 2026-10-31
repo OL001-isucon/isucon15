@@ -133,16 +133,25 @@ func loadInitialImages(ctx context.Context, h *HandlerContext, refs []initialIma
 	if len(missingIDs) == 0 {
 		return images, nil
 	}
-	var rows []struct {
-		ID   string `db:"id"`
-		Data []byte `db:"data"`
+	// created_at = ANY(...) では generic plan でパーティションが絞られないので、月 (パーティションの単位) ごとに範囲で引く
+	byMonth := map[time.Time][]string{}
+	for i, id := range missingIDs {
+		t := missingCreatedAt[i].UTC()
+		month := time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, time.UTC)
+		byMonth[month] = append(byMonth[month], id)
 	}
-	if err := h.DB.SelectContext(ctx, &rows, `SELECT id, data FROM image_objects WHERE id = ANY($1) AND created_at = ANY($2)`, missingIDs, missingCreatedAt); err != nil {
-		return nil, err
-	}
-	for _, row := range rows {
-		images[row.ID] = row.Data
-		h.Images.SaveCached(row.ID, row.Data)
+	for month, ids := range byMonth {
+		var rows []struct {
+			ID   string `db:"id"`
+			Data []byte `db:"data"`
+		}
+		if err := h.DB.SelectContext(ctx, &rows, `SELECT id, data FROM image_objects WHERE id = ANY($1) AND created_at >= $2 AND created_at < $3`, ids, month, month.AddDate(0, 1, 0)); err != nil {
+			return nil, err
+		}
+		for _, row := range rows {
+			images[row.ID] = row.Data
+			h.Images.SaveCached(row.ID, row.Data)
+		}
 	}
 	return images, nil
 }
