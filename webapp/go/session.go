@@ -33,9 +33,9 @@ func GetSession(c *echo.Context) *Session {
 	return sess
 }
 
-// リージョンにアプリサーバーが 1 台しかない europe / america でだけ、セッションを手元に持つ。
-// DB までの 1 往復 (100 ms) が全リクエストに乗っているため。ログイン・ログアウト・退会・リージョン変更は
-// 同じサーバーに来るので、その場で消せば整合が保てる。asia は asia1 / asia2 に振り分けられるので使わない
+// セッションを手元に持ち、全リクエストに乗る DB 往復を減らす。ログイン・ログアウト・退会・リージョン変更は
+// 同じサーバーに来るので、その場で消せば整合が保てる。asia は asia1 の nginx が X-Client-IP の consistent hash で
+// 振り分け、ベンチは利用者ごとに IP を固定するので、同じ利用者は同じサーバーに届く
 const sessionCacheTTL = 2 * time.Second
 
 type sessionCache struct {
