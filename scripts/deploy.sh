@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
 # 指定した ref をサーバーへ配置してビルドし、設定を反映して再起動する
 # 誰が実行しても同じ結果になるよう、作業ツリーではなく git の ref を配置する
-# usage: scripts/deploy.sh [ref]  省略時は origin/main
+# usage: scripts/deploy.sh [-s host] [ref]  ref の省略時は origin/main
 source "$(dirname "$0")/lib.sh"
+require_host
 
 cd "$ROOT"
 
 ref=${1:-origin/main}
 git fetch -q origin
 commit=$(git rev-parse --short "$ref")
-echo "== deploy $ref ($commit)"
+echo "== deploy $ref ($commit) to $APP_HOST"
 
 sql_dir=$(dirname "$SCHEMA_FILE")
 archive=$(mktemp)
@@ -33,4 +34,4 @@ for host in "${HOSTS[@]}"; do
 done
 
 on "$APP_HOST" "sudo systemctl restart $APP_SERVICE"
-echo "== deployed $ref ($commit)"
+echo "== deployed $ref ($commit) to $APP_HOST"

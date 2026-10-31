@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# 計測用ログを全サーバーで切り替える。提出前に off にする
-# usage: scripts/logging.sh on|off
+# 計測用ログを切り替える。-s を省略すると全サーバーが対象。提出前に off にする
+# usage: scripts/logging.sh [-s host] on|off
 source "$(dirname "$0")/lib.sh"
 
-mode=${1:?usage: scripts/logging.sh on|off}
+mode=${1:?usage: scripts/logging.sh [-s host] on|off}
 
 for host in "${HOSTS[@]}"; do
   echo "== $host"
