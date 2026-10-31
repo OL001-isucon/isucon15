@@ -34,6 +34,65 @@ var (
 // 接続が返らないままプールが埋まる。残りのコアを他の処理に残す
 var imageSignatureSlot = make(chan struct{}, 1)
 
+const imageSignatureLanes = 16
+
+// 2 本以下なら空きレーンを無駄にする分、1 本ずつ計算する方が速い
+const imageSignatureMinLanes = 3
+
+type imageSignatureJob struct {
+	key     []byte
+	imageID string
+	exp     int64
+	sig     []byte
+	done    chan struct{}
+}
+
+// imageSignatureJobs は順番待ちの署名を持つ。nil ならワーカーがなく、1 本ずつ計算する
+var imageSignatureJobs chan *imageSignatureJob
+
+// startImageSignatureWorker は順番待ちの署名をまとめて計算するワーカーを 1 つ起動する。
+// ワーカーが 1 つなので、計算が使うコアは今までと同じ 1 つに収まる
+func startImageSignatureWorker() {
+	imageSignatureJobs = make(chan *imageSignatureJob, imageSignatureLanes*16)
+	go func() {
+		for job := range imageSignatureJobs {
+			runImageSignatureJobs(drainImageSignatureJobs(job))
+		}
+	}()
+}
+
+func drainImageSignatureJobs(first *imageSignatureJob) []*imageSignatureJob {
+	jobs := make([]*imageSignatureJob, 1, imageSignatureLanes)
+	jobs[0] = first
+	for len(jobs) < imageSignatureLanes {
+		select {
+		case job := <-imageSignatureJobs:
+			jobs = append(jobs, job)
+		default:
+			return jobs
+		}
+	}
+	return jobs
+}
+
+func runImageSignatureJobs(jobs []*imageSignatureJob) {
+	if len(jobs) < imageSignatureMinLanes {
+		for _, job := range jobs {
+			job.sig = imageSignature(job.key, job.imageID, job.exp)
+		}
+	} else {
+		// 空きレーンは同じ job で埋める。同じ値を計算するだけで結果は変わらない
+		var lanes [imageSignatureLanes]*imageSignatureJob
+		for i := range lanes {
+			lanes[i] = jobs[i%len(jobs)]
+		}
+		signImageLanes(&lanes)
+	}
+	for _, job := range jobs {
+		close(job.done)
+	}
+}
+
 // imageSignatureCache は exp ごとに署名を持つ。exp が過ぎた分を丸ごと捨てられるようにしている
 type imageSignatureCache struct {
 	mu      sync.RWMutex
@@ -94,6 +153,13 @@ func imageSignatureCacheKey(key []byte, imageID string) string {
 // limitedImageSignature は順番を待って計算する。待つ間に同じ署名ができていれば、それを使う
 func limitedImageSignature(cacheKey string, key []byte, imageID string, exp int64) []byte {
 	start := time.Now()
+	if imageSignatureJobs != nil {
+		job := &imageSignatureJob{key: key, imageID: imageID, exp: exp, done: make(chan struct{})}
+		imageSignatureJobs <- job
+		<-job.done
+		imageSignatureWaitNanos.Add(int64(time.Since(start)))
+		return job.sig
+	}
 	imageSignatureSlot <- struct{}{}
 	defer func() { <-imageSignatureSlot }()
 	imageSignatureWaitNanos.Add(int64(time.Since(start)))
