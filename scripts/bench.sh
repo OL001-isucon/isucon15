@@ -1,17 +1,18 @@
 #!/usr/bin/env bash
 # ベンチの計測を準備し、Web のボタンが押されたら計測して、終了後に解析する
 # ログを空にしてから /initialize を検知するまで待つので、ボタンは「準備完了」の表示後に押す
-# usage: scripts/bench.sh [メモ]
+# usage: scripts/bench.sh [-s host] [メモ]
 source "$(dirname "$0")/lib.sh"
+require_host
 
 memo=${1:-}
-dir="$ROOT/results/$(date +%Y%m%d-%H%M%S)"
+dir="$ROOT/results/$(date +%Y%m%d-%H%M%S)-$APP_HOST"
 mkdir -p "$dir"
 
 on "$WEB_HOST" "sudo truncate -s 0 $ACCESS_LOG"
 on "$DB_HOST" "sudo truncate -s 0 $SLOW_LOG"
 
-echo ">>> 準備完了。Web のベンチ実行ボタンを押してください"
+echo ">>> 準備完了。ベンチの対象が $WEB_HOST であることを確認して、Web のベンチ実行ボタンを押してください"
 
 on "$WEB_HOST" "timeout $WAIT_START_SECONDS bash -c 'until sudo grep -q $START_PATTERN $ACCESS_LOG; do sleep 1; done'"
 echo ">>> ベンチ開始を検知しました"
@@ -54,6 +55,7 @@ deployed=$(on "$APP_HOST" "cat ~/DEPLOYED 2>/dev/null || echo unknown")
 
 {
   echo "- メモ: ${memo:-なし}"
+  echo "- サーバー: $APP_HOST"
   echo "- デプロイ: \`$deployed\`"
   echo "- スコア: (ポータルの結果を追記)"
   echo
@@ -85,7 +87,7 @@ if ! command -v gh >/dev/null; then
   exit 0
 fi
 
-title="[bench] $(date +'%H:%M:%S') ${memo}"
+title="[bench] $APP_HOST $(date +'%H:%M:%S') ${memo}"
 url=$(gh issue create --repo "$GITHUB_REPO" --title "$title" --body-file "$dir/summary.md")
 # issue のコメントは約 65KB が上限
 for file in alp.txt slow-digest.txt pprof-cum.txt; do

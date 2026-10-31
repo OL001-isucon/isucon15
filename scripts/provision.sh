@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# 全サーバーに計測ツールを入れて、計測用ログを有効にする。並列で実行する
+# 計測ツールを入れて、計測用ログを有効にする。-s を省略すると全サーバーへ並列で実行する
+# usage: scripts/provision.sh [-s host]
 source "$(dirname "$0")/lib.sh"
 
 log_dir=$(mktemp -d)

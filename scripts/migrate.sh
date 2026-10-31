@@ -5,8 +5,9 @@
 #
 # sqldef は問題のスキーマやトリガーを解釈できないことがあるので、DB には接続させない。
 # スキーマを一時 DB へ流し、トリガーを除いた mysqldump 同士を sqldef のファイル比較に渡す
-# usage: scripts/migrate.sh [--apply]
+# usage: scripts/migrate.sh [-s host] [--apply]
 source "$(dirname "$0")/lib.sh"
+require_host
 
 cd "$ROOT"
 

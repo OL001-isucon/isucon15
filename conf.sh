@@ -3,10 +3,10 @@
 # ssh_config の Host 名
 HOSTS=(isu1 isu2 isu3)
 
-# サーバーの役割。分割したらここを書き換える
-WEB_HOST=isu1
-APP_HOST=isu1
-DB_HOST=isu1
+# サーバーの役割。分割するまでは空のままにして、各スクリプトに -s でサーバーを指定する
+WEB_HOST=
+APP_HOST=
+DB_HOST=
 
 # アプリ(問題が公開されたら書き換える)
 APP_SERVICE=isuride-go.service

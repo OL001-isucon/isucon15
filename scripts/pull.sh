@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 # サーバーのコードと設定をリポジトリへ取り込んでコミットする。push はしない
-# webapp は APP_HOST から、設定は全サーバーから servers/<host>/ に取り込む
+# webapp は APP_HOST(未設定なら HOSTS の先頭)から、設定は全サーバーから servers/<host>/ に取り込む
+# usage: scripts/pull.sh [-s host]
 source "$(dirname "$0")/lib.sh"
 
 cd "$ROOT"
+
+webapp_host=${APP_HOST:-${HOSTS[0]}}
 
 find_excludes=""
 for pattern in "${PULL_EXCLUDES[@]}"; do
@@ -11,9 +14,9 @@ for pattern in "${PULL_EXCLUDES[@]}"; do
 done
 
 # 10MB 以上はバイナリや初期データなので取り込まず、一覧だけ表示する
-echo "== webapp ($APP_HOST)"
-on "$APP_HOST" "find webapp -type f -size +10M $find_excludes" | sed 's/^/skip: /'
-on "$APP_HOST" "find webapp env.sh -type f -size -10M $find_excludes 2>/dev/null | tar czf - -T -" | tar xzf -
+echo "== webapp ($webapp_host)"
+on "$webapp_host" "find webapp -type f -size +10M $find_excludes" | sed 's/^/skip: /'
+on "$webapp_host" "find webapp env.sh -type f -size -10M $find_excludes 2>/dev/null | tar czf - -T -" | tar xzf -
 
 # 秘密鍵と DB の管理用パスワードは取り込まない
 # 計測用の設定も取り込まない。取り込むと logging.sh off の後のデプロイで復活する
