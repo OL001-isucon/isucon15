@@ -85,6 +85,14 @@ func getImageHandler(h *HandlerContext) echo.HandlerFunc {
 			return NewAPIError(http.StatusForbidden, "image_forbidden")
 		}
 
+		// 本体は nginx に sendfile で返させる (354 KB × 1 万回 / run を Go と nginx の proxy に通さない)。
+		// nginx 側にファイルが無ければ X-Accel-Fallback 付きで戻ってくるので、そのときは本体を返す。
+		// 新規画像はリージョンの代表 (nginx と同じホスト) に全部あるので手元の有無を見ずに任せる
+		if c.Request().Header.Get("X-Accel-Fallback") == "" && (object.OnDisk || h.Images.hasCached(input.ImageID)) {
+			c.Response().Header().Set("X-Accel-Redirect", h.Images.accelPath(input.ImageID, object.OnDisk))
+			c.Response().Header().Set("Content-Type", object.MediaType)
+			return c.NoContent(http.StatusOK)
+		}
 		var data []byte
 		if object.OnDisk {
 			data, err = h.Images.LoadNew(ctx, input.ImageID, object.OriginRegion)

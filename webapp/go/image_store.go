@@ -102,6 +102,21 @@ func (s *ImageStore) cachePath(imageID string) string {
 	return filepath.Join(s.root, "cache", imageID[:2], imageID)
 }
 
+// accelPath は nginx の internal location (/internal-images/ → ImageDir) から見た画像のパス。
+// 本体は nginx が sendfile で返し、Go は署名の検証だけを行う
+func (s *ImageStore) accelPath(imageID string, onDisk bool) string {
+	dir := "cache"
+	if onDisk {
+		dir = "new"
+	}
+	return "/internal-images/" + dir + "/" + imageID[:2] + "/" + imageID
+}
+
+func (s *ImageStore) hasCached(imageID string) bool {
+	_, err := os.Stat(s.cachePath(imageID))
+	return err == nil
+}
+
 // 途中まで書いたファイルが読まれないよう、一時ファイルに書いて rename する
 func writeImageFile(path string, data []byte, durable bool) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
@@ -112,6 +127,11 @@ func writeImageFile(path string, data []byte, durable bool) error {
 		return err
 	}
 	defer os.Remove(tmp.Name())
+	// nginx (www-data) が X-Accel-Redirect で直接読めるようにする
+	if err := tmp.Chmod(0o644); err != nil {
+		tmp.Close()
+		return err
+	}
 	if _, err := tmp.Write(data); err != nil {
 		tmp.Close()
 		return err
