@@ -155,6 +155,12 @@ for host in "${APP_HOSTS[@]}"; do
   deployed_lines+=("$(on "$host" "cat ~/DEPLOYED 2>/dev/null || echo unknown")")
 done
 
+score="(ポータルの結果を追記)"
+if job=$(bash "$ROOT/scripts/fetch-score.sh"); then
+  score="${job#* } (ジョブ ${job% *})"
+fi
+echo ">>> スコア: $score"
+
 {
   echo "- メモ: ${memo:-なし}"
   echo "- デプロイ:"
@@ -164,7 +170,7 @@ done
   if [ "$(printf '%s\n' "${deployed_lines[@]}" | sort -u | wc -l)" -gt 1 ]; then
     echo "- **注意: リージョンごとにデプロイした版が違います**"
   fi
-  echo "- スコア: (ポータルの結果を追記)"
+  echo "- スコア: $score"
   for host in "${APP_HOSTS[@]}"; do
     echo
     echo "### alp ($host)"
@@ -207,7 +213,7 @@ fi
 
 # Windows の gh は /c/... 形式のパスを開けないので、相対パスで渡す
 cd "$dir"
-title="[bench] $(date +'%H:%M:%S') ${memo}"
+title="[bench] $(date +'%H:%M:%S') ${score%% *} ${memo}"
 url=$(gh issue create --repo "$GITHUB_REPO" --title "$title" --body-file summary.md)
 # issue のコメントは約 65KB が上限
 for file in alp-*.txt pg-stats.txt db-vmstat.txt db-waits.txt pprof-cum-*.txt; do
