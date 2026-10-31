@@ -90,6 +90,7 @@ collect_db() {
 
 collect() {
   local host=$1
+  on "$host" "curl -fsS http://localhost:6060/debug/vars" > "$dir/vars-$host.json" || true
   on "$host" "cat > /tmp/alp.yml" < "$ROOT/etc/alp.yml"
   on "$host" "sudo alp ltsv --config /tmp/alp.yml --file $ACCESS_LOG" > "$dir/alp-$host.txt"
   if on "$host" "test -s /tmp/cpu.pprof"; then

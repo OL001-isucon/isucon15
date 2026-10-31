@@ -1,6 +1,7 @@
 package isureal
 
 import (
+	"expvar"
 	"os"
 
 	"github.com/jmoiron/sqlx"
@@ -11,10 +12,11 @@ import (
 )
 
 type HandlerContext struct {
-	DB     *sqlx.DB
-	Config *Config
-	IPBans *IPBanList
-	Images *ImageStore
+	DB            *sqlx.DB
+	Config        *Config
+	IPBans        *IPBanList
+	Images        *ImageStore
+	Notifications *NotificationHub
 }
 
 func NewServer(config *Config) *echo.Echo {
@@ -33,16 +35,19 @@ func NewServer(config *Config) *echo.Echo {
 		panic("failed to open database: " + err.Error())
 	}
 	db.SetMaxOpenConns(30)
+	// localhost:6060/debug/vars で接続プールの待ちを確認する
+	expvar.Publish("db_stats", expvar.Func(func() any { return db.Stats() }))
 	err = db.Ping()
 	if err != nil {
 		panic("failed to ping database: " + err.Error())
 	}
 
 	handlerContext := &HandlerContext{
-		DB:     db,
-		Config: config,
-		IPBans: &IPBanList{},
-		Images: NewImageStore(config),
+		DB:            db,
+		Config:        config,
+		IPBans:        &IPBanList{},
+		Images:        NewImageStore(config),
+		Notifications: NewNotificationHub(),
 	}
 	e.Use(IPBanMiddleware(handlerContext))
 
@@ -51,6 +56,7 @@ func NewServer(config *Config) *echo.Echo {
 	e.GET("/internal/images/:imageId", getInternalImageHandler(handlerContext), internalOnly)
 	e.PUT("/internal/images/:imageId", putInternalImageHandler(handlerContext), internalOnly)
 	e.POST("/internal/images-reset", resetInternalImagesHandler(handlerContext), internalOnly)
+	e.POST("/internal/notifications-wake", wakeInternalNotificationsHandler(handlerContext), internalOnly)
 
 	e.POST("/api/initialize", initializeHandler(handlerContext))
 	e.POST("/api/auth/register", registerHandler(handlerContext))
