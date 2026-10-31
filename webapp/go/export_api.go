@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/labstack/echo/v5"
 )
@@ -25,26 +26,27 @@ func exportPostsHandler(h *HandlerContext) echo.HandlerFunc {
 		}
 		var posts []struct {
 			Post
-			OnDisk       bool    `db:"on_disk"`
-			OriginRegion *string `db:"origin_region"`
+			OnDisk         bool      `db:"on_disk"`
+			OriginRegion   *string   `db:"origin_region"`
+			ImageCreatedAt time.Time `db:"image_created_at"`
 		}
 		if err := h.DB.SelectContext(ctx, &posts, `
-   SELECT `+postColumns+`, i.data IS NULL AS on_disk, i.origin_region
+   SELECT `+postColumns+`, i.on_disk, i.origin_region, i.created_at AS image_created_at
    FROM posts p
    JOIN posting_windows w ON w.id = p.posting_window_id
-   JOIN image_objects i ON i.id = p.image_id
+   JOIN image_meta i ON i.id = p.image_id
    WHERE p.author_id = $1 AND p.deleted_at IS NULL
    ORDER BY p.posted_at, p.id
   `, userID); err != nil {
 			return err
 		}
-		initialIDs := make([]string, 0, len(posts))
+		initialRefs := make([]initialImageRef, 0, len(posts))
 		for _, post := range posts {
 			if !post.OnDisk {
-				initialIDs = append(initialIDs, post.ImageID)
+				initialRefs = append(initialRefs, initialImageRef{ID: post.ImageID, CreatedAt: post.ImageCreatedAt})
 			}
 		}
-		initialImages, err := loadInitialImages(ctx, h, initialIDs)
+		initialImages, err := loadInitialImages(ctx, h, initialRefs)
 		if err != nil {
 			return err
 		}

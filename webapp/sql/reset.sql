@@ -21,12 +21,17 @@ BEGIN
   END LOOP;
 END $$;
 DELETE FROM image_objects WHERE created_at > (SELECT created_at FROM initial_data_boundary);
+DELETE FROM image_meta WHERE created_at > (SELECT created_at FROM initial_data_boundary);
 DELETE FROM users WHERE created_at > (SELECT created_at FROM initial_data_boundary);
 
 INSERT INTO image_objects (id, owner_user_id, data, media_type, created_at)
 SELECT b.id, b.owner_user_id, b.data, b.media_type, b.created_at
 FROM initial_profile_images b
 WHERE NOT EXISTS (SELECT 1 FROM image_objects i WHERE i.id = b.id);
+INSERT INTO image_meta (id, owner_user_id, media_type, origin_region, created_at, on_disk)
+SELECT b.id, b.owner_user_id, b.media_type, NULL, b.created_at, false
+FROM initial_profile_images b
+WHERE NOT EXISTS (SELECT 1 FROM image_meta m WHERE m.id = b.id);
 
 UPDATE users u
 SET display_name = i.display_name, bio = i.bio, profile_image_id = i.profile_image_id, region = i.region,
