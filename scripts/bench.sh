@@ -39,7 +39,7 @@ take_profile() {
 }
 
 take_pool_metrics() {
-  on "$1" "bash -s $DB_METRICS_SECONDS" < "$ROOT/remote/pool-metrics.sh"
+  on "$1" "bash -s $DB_METRICS_SECONDS $DB_PRIVATE_IP" < "$ROOT/remote/pool-metrics.sh"
 }
 
 # 負荷の最中に、どこで止まっている goroutine が多いかを記録する。接続を借りたままの処理を探すため
@@ -61,6 +61,8 @@ collect_db() {
   on "$DB_HOST" "cat /tmp/db-waits.txt 2>/dev/null" > "$dir/db-waits.txt" || true
   on "$DB_HOST" "cat /tmp/db-activity.txt 2>/dev/null" > "$dir/db-activity.txt" || true
   on "${APP_HOSTS[0]}" "cat /tmp/pool-metrics.txt 2>/dev/null" > "$dir/pool-metrics.txt" || true
+  on "${APP_HOSTS[0]}" "cat /tmp/pool-ping.txt 2>/dev/null" > "$dir/pool-ping.txt" || true
+  on "${APP_HOSTS[0]}" "cat /tmp/pool-vmstat.txt 2>/dev/null" > "$dir/pool-vmstat.txt" || true
   {
     if [ -s "$dir/db-vmstat.txt" ]; then
       # 列名から位置を引く。vmstat の 1 行目は起動からの平均なので飛ばす
