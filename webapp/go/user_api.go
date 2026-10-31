@@ -84,32 +84,20 @@ func registerHandler(h *HandlerContext) echo.HandlerFunc {
 		secretKey := uuid.NewString()
 		hash := sha256.Sum256([]byte(secretKey))
 		ctx := c.Request().Context()
-		tx, err := h.DB.BeginTxx(ctx, nil)
-		if err != nil {
-			return err
-		}
-		defer tx.Rollback()
-		// ユーザー名が一意である必要があります。
-		if _, err := tx.ExecContext(ctx, `LOCK TABLE users IN SHARE ROW EXCLUSIVE MODE`); err != nil {
-			return err
-		}
-		var exists bool
-		if err := tx.GetContext(ctx, &exists, `SELECT EXISTS(SELECT 1 FROM users WHERE username = $1)`, input.Username); err != nil {
-			return err
-		}
-		if exists {
+		// ユーザー名の一意性は users_username_key (004_users_username_unique.sql) が守る。
+		// 以前は LOCK TABLE users で登録同士と期間開始を直列化していたが、表ロックは
+		// users への全書き込みを待たせるので外し、競合したときだけ制約違反を 409 に写す
+		userID := uuid.NewString()
+		_, err := h.DB.ExecContext(ctx, `INSERT INTO users (id, username, secret_key_hash, display_name, region) VALUES ($1, $2, $3, $4, $5)`,
+			userID, input.Username, hex.EncodeToString(hash[:]), input.DisplayName, input.Region)
+		if isUniqueViolation(err) {
 			return NewAPIError(http.StatusConflict, "username_taken")
 		}
-		userID := uuid.NewString()
-		if _, err := tx.ExecContext(ctx, `INSERT INTO users (id, username, secret_key_hash, display_name, region) VALUES ($1, $2, $3, $4, $5)`,
-			userID, input.Username, hex.EncodeToString(hash[:]), input.DisplayName, input.Region); err != nil {
-			return err
-		}
-		user, err := getUser(ctx, tx, userID)
 		if err != nil {
 			return err
 		}
-		if err := tx.Commit(); err != nil {
+		user, err := getUser(ctx, h.DB, userID)
+		if err != nil {
 			return err
 		}
 		return c.JSON(http.StatusCreated, registerResponse{SecretKey: secretKey, User: newSessionUserResponse(user)})
