@@ -144,13 +144,15 @@ if ! command -v gh >/dev/null; then
   exit 0
 fi
 
+# Windows の gh は /c/... 形式のパスを開けないので、相対パスで渡す
+cd "$dir"
 title="[bench] $(date +'%H:%M:%S') ${memo}"
-url=$(gh issue create --repo "$GITHUB_REPO" --title "$title" --body-file "$dir/summary.md")
+url=$(gh issue create --repo "$GITHUB_REPO" --title "$title" --body-file summary.md)
 # issue のコメントは約 65KB が上限
-for file in "$dir"/alp-*.txt "$dir/pg-stats.txt" "$dir"/pprof-cum-*.txt; do
+for file in alp-*.txt pg-stats.txt pprof-cum-*.txt; do
   [ -f "$file" ] || continue
-  { basename "$file"; echo '```'; head -c 60000 "$file" || true; echo '```'; } > "$dir/comment.md"
-  gh issue comment "$url" --body-file "$dir/comment.md" > /dev/null
+  { echo "$file"; echo '```'; head -c 60000 "$file" || true; echo '```'; } > comment.md
+  gh issue comment "$url" --body-file comment.md > /dev/null
 done
-rm -f "$dir/comment.md"
+rm -f comment.md
 echo "issue: $url"
