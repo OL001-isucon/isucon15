@@ -28,7 +28,8 @@ build_app() {
   on "$host" "tar xf -" < "$archive"
   # Windows でコミットすると実行権限が落ち、/initialize の init.sh が動かなくなる
   on "$host" "find $APP_DIR $SQL_DIR -name '*.sh' -exec chmod +x {} +"
-  on "$host" "cd $APP_DIR && PATH=$GO_BIN_DIR:\$PATH go build -o $APP_BIN $APP_MAIN_PKG"
+  # 画像の署名に AVX-512 を使う。実験機能なしでビルドしても 1 本ずつの計算で動く
+  on "$host" "cd $APP_DIR && PATH=$GO_BIN_DIR:\$PATH GOEXPERIMENT=simd go build -o $APP_BIN $APP_MAIN_PKG"
   on "$host" "echo '$ref $commit' > ~/DEPLOYED"
 }
 

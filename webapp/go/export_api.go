@@ -50,6 +50,11 @@ func exportPostsHandler(h *HandlerContext) echo.HandlerFunc {
 		if err != nil {
 			return err
 		}
+		refs := make([]imageSignatureRef, 0, len(posts)+1)
+		for _, post := range posts {
+			refs = append(refs, imageSignatureRef{author, post.ImageID})
+		}
+		presignImages(appendUserImageRefs(refs, author))
 
 		var body bytes.Buffer
 		writer := zip.NewWriter(&body)

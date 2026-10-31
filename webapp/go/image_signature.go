@@ -34,6 +34,134 @@ var (
 // 接続が返らないままプールが埋まる。残りのコアを他の処理に残す
 var imageSignatureSlot = make(chan struct{}, 1)
 
+const imageSignatureLanes = 16
+
+// 2 本以下なら空きレーンを無駄にする分、1 本ずつ計算する方が速い
+const imageSignatureMinLanes = 3
+
+type imageSignatureJob struct {
+	cacheKey string
+	key      []byte
+	imageID  string
+	exp      int64
+	sig      []byte
+	done     chan struct{}
+}
+
+func newImageSignatureJob(cacheKey string, key []byte, imageID string, exp int64) *imageSignatureJob {
+	return &imageSignatureJob{cacheKey: cacheKey, key: key, imageID: imageID, exp: exp, done: make(chan struct{})}
+}
+
+// imageSignatureJobs は順番待ちの署名を束で持つ。nil ならワーカーがなく、1 本ずつ計算する
+var imageSignatureJobs chan []*imageSignatureJob
+
+// startImageSignatureWorker は順番待ちの署名をまとめて計算するワーカーを 1 つ起動する。
+// ワーカーが 1 つなので、計算が使うコアは今までと同じ 1 つに収まる
+func startImageSignatureWorker() {
+	imageSignatureJobs = make(chan []*imageSignatureJob, imageSignatureLanes)
+	go func() {
+		var pending []*imageSignatureJob
+		for jobs := range imageSignatureJobs {
+			pending = append(pending[:0], jobs...)
+			for len(pending) > 0 {
+				pending = takeImageSignatureJobs(pending)
+				n := min(len(pending), imageSignatureLanes)
+				runImageSignatureJobs(pending[:n])
+				pending = pending[n:]
+			}
+		}
+	}()
+}
+
+// takeImageSignatureJobs はレーンが埋まるまで、待っている束を足す
+func takeImageSignatureJobs(pending []*imageSignatureJob) []*imageSignatureJob {
+	for len(pending) < imageSignatureLanes {
+		select {
+		case jobs := <-imageSignatureJobs:
+			pending = append(pending, jobs...)
+		default:
+			return pending
+		}
+	}
+	return pending
+}
+
+// waitImageSignatureJobs はレーンの数ごとの束にしてワーカーへ渡し、全部終わるまで待つ
+func waitImageSignatureJobs(jobs []*imageSignatureJob) {
+	for i := 0; i < len(jobs); i += imageSignatureLanes {
+		imageSignatureJobs <- jobs[i:min(i+imageSignatureLanes, len(jobs))]
+	}
+	for _, job := range jobs {
+		<-job.done
+	}
+}
+
+type imageSignatureRef struct {
+	user    User
+	imageID string
+}
+
+// appendUserImageRefs は利用者の画像とプロフィール画像の署名を refs に足す
+func appendUserImageRefs(refs []imageSignatureRef, user User, imageIDs ...string) []imageSignatureRef {
+	if user.ProfileImageID != nil {
+		refs = append(refs, imageSignatureRef{user, *user.ProfileImageID})
+	}
+	for _, imageID := range imageIDs {
+		refs = append(refs, imageSignatureRef{user, imageID})
+	}
+	return refs
+}
+
+// presignImages は応答に必要な署名を先にまとめて計算し、キャッシュへ入れる。
+// signedImageURL は 1 本ずつ待つので、同時に待つ本数が少なくレーンが埋まらない。
+// 応答に必要な本数が分かる処理は、ここを通すとレーンを埋められる
+func presignImages(refs []imageSignatureRef) {
+	if imageSignatureJobs == nil {
+		return
+	}
+	exp := imageURLExp()
+	seen := make(map[string]bool, len(refs))
+	jobs := make([]*imageSignatureJob, 0, len(refs))
+	for _, ref := range refs {
+		cacheKey := imageSignatureCacheKey(ref.user.ImageKey, ref.imageID)
+		if seen[cacheKey] {
+			continue
+		}
+		seen[cacheKey] = true
+		if _, ok := imageSignatures.get(cacheKey, exp); !ok {
+			jobs = append(jobs, newImageSignatureJob(cacheKey, ref.user.ImageKey, ref.imageID, exp))
+		}
+	}
+	if len(jobs) == 0 {
+		return
+	}
+	imageSignatureMisses.Add(int64(len(jobs)))
+	start := time.Now()
+	waitImageSignatureJobs(jobs)
+	imageSignatureWaitNanos.Add(int64(time.Since(start)))
+	for _, job := range jobs {
+		imageSignatures.put(job.cacheKey, job.exp, job.sig)
+	}
+}
+
+func runImageSignatureJobs(jobs []*imageSignatureJob) {
+	if len(jobs) < imageSignatureMinLanes {
+		for _, job := range jobs {
+			job.sig = imageSignature(job.key, job.imageID, job.exp)
+		}
+	} else {
+		// 空きレーンは同じ job で埋める。同じ値を計算するだけで結果は変わらない
+		var lanes [imageSignatureLanes]*imageSignatureJob
+		for i := range lanes {
+			lanes[i] = jobs[i%len(jobs)]
+		}
+		signImageLanes(&lanes)
+	}
+	for _, job := range jobs {
+		close(job.done)
+	}
+}
+
 // imageSignatureCache は exp ごとに署名を持つ。exp が過ぎた分を丸ごと捨てられるようにしている
 type imageSignatureCache struct {
 	mu      sync.RWMutex
@@ -94,6 +222,12 @@ func imageSignatureCacheKey(key []byte, imageID string) string {
 // limitedImageSignature は順番を待って計算する。待つ間に同じ署名ができていれば、それを使う
 func limitedImageSignature(cacheKey string, key []byte, imageID string, exp int64) []byte {
 	start := time.Now()
+	if imageSignatureJobs != nil {
+		job := newImageSignatureJob(cacheKey, key, imageID, exp)
+		waitImageSignatureJobs([]*imageSignatureJob{job})
+		imageSignatureWaitNanos.Add(int64(time.Since(start)))
+		return job.sig
+	}
 	imageSignatureSlot <- struct{}{}
 	defer func() { <-imageSignatureSlot }()
 	imageSignatureWaitNanos.Add(int64(time.Since(start)))
@@ -117,10 +251,14 @@ func verifyImageSignature(key []byte, imageID string, exp int64, sig []byte) boo
 	return true
 }
 
-func signedImageURL(user User, imageID string) string {
+func imageURLExp() int64 {
 	exp := time.Now().Add(imageURLLifetime).Unix()
 	exp += imageURLExpStepSeconds - 1
-	exp -= exp % imageURLExpStepSeconds
+	return exp - exp%imageURLExpStepSeconds
+}
+
+func signedImageURL(user User, imageID string) string {
+	exp := imageURLExp()
 	cacheKey := imageSignatureCacheKey(user.ImageKey, imageID)
 	sig, ok := imageSignatures.get(cacheKey, exp)
 	if ok {
