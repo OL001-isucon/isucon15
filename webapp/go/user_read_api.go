@@ -29,6 +29,12 @@ func normalizeSearchText(value string) string {
 	return norm.NFC.String(cases.Fold().String(norm.NFC.String(value)))
 }
 
+var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+
+func escapeLike(value string) string {
+	return likeEscaper.Replace(value)
+}
+
 // 名前は多言語で、lower では ß などの折りたたみが再現できないので、Go で正規化した値を DB に持つ
 func userSearchText(username, displayName string) string {
 	return normalizeSearchText(username) + "\n" + normalizeSearchText(displayName)
@@ -99,7 +105,7 @@ func searchUsersHandler(h *HandlerContext) echo.HandlerFunc {
 		// 全ユーザーを読まないよう DB で絞る。比較は下の Go の処理が正で、search_text は同じ正規化の値を持つ
 		// search_text が NULL の行は無条件に通すので、その数だけ LIMIT を増やす
 		var users []User
-		if err := h.DB.SelectContext(ctx, &users, `SELECT `+strings.Join(userColumns, ", ")+` FROM users WHERE status='active' AND id<>$1 AND ($2='' OR (username,id)>($2,$3)) AND (search_text IS NULL OR strpos(search_text, $4) > 0) ORDER BY username, id LIMIT $5::bigint + (SELECT count(*) FROM users WHERE search_text IS NULL)`, viewer, input.BeforeUsername, input.BeforeID, query, 51+len(blocked)); err != nil {
+		if err := h.DB.SelectContext(ctx, &users, `SELECT `+strings.Join(userColumns, ", ")+` FROM users WHERE status='active' AND id<>$1 AND ($2='' OR (username,id)>($2,$3)) AND (search_text IS NULL OR search_text LIKE $4) ORDER BY username, id LIMIT $5::bigint + (SELECT count(*) FROM users WHERE search_text IS NULL)`, viewer, input.BeforeUsername, input.BeforeID, "%"+escapeLike(query)+"%", 51+len(blocked)); err != nil {
 			return err
 		}
 		items := make([]relationshipUserResponse, 0)
