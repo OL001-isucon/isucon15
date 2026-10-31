@@ -212,24 +212,26 @@ func (s *ImageStore) fetchFromRegion(ctx context.Context, node, imageID string) 
 	return io.ReadAll(res.Body)
 }
 
-// Distribute は裏で他のリージョンへ配る。失敗しても読み取り時に保存元から取得できる
+// Distribute は同じリージョンの代表ノードへ裏で配る。他のリージョンへは配らない。
+// リージョン間は 0.7MB/s で、投稿のたびに全リージョンへ送ると回線が埋まり、europe / america から DB への
+// 全パケットが画像の後ろに並んでいた (1 run で failed to distribute が 2,600 件超、ほぼ全部タイムアウト)。
+// 他のリージョンからの読み取りは 1 run に 100 回程度で、LoadNew が保存元から取りに行く
 func (s *ImageStore) Distribute(imageID string, data []byte) {
-	for node := range nodeHosts {
-		if node == s.node || !primaryNode(node) {
-			continue
-		}
-		go func() {
-			ctx, cancel := context.WithTimeout(context.Background(), imageTransferTimeout)
-			defer cancel()
-			res, err := s.internalRequest(ctx, http.MethodPut, node, "/internal/images/"+imageID, data)
-			if err != nil {
-				log.Printf("failed to distribute image %s to %s: %v", imageID, node, err)
-				return
-			}
-			io.Copy(io.Discard, res.Body)
-			res.Body.Close()
-		}()
+	primary := regionPrimary(s.node)
+	if primary == s.node {
+		return
 	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), imageTransferTimeout)
+		defer cancel()
+		res, err := s.internalRequest(ctx, http.MethodPut, primary, "/internal/images/"+imageID, data)
+		if err != nil {
+			log.Printf("failed to distribute image %s to %s: %v", imageID, primary, err)
+			return
+		}
+		io.Copy(io.Discard, res.Body)
+		res.Body.Close()
+	}()
 }
 
 // ClearNew は rename してから消すので、大量のファイルがあっても初期化を待たせない
