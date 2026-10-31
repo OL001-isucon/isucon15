@@ -23,8 +23,8 @@ build_app() {
   if [ "$host" = asia2 ]; then
     on "$host" "grep -q '^ISUREAL_NODE=' ~/env.sh || echo ISUREAL_NODE=asia2 >> ~/env.sh"
   fi
-  # GC の回数を減らし、GET の debug ログ (guard は info 行しか見ない) と DB への TLS をやめて CPU を処理に回す
-  for line in GOGC=400 GOMEMLIMIT=1200MiB ISUREAL_LOG_LEVEL=info PGSSLMODE=disable; do
+  # GC の回数を減らし、DB への TLS をやめて CPU を処理に回す。ログの調整は計測に使うので最後に別途行う
+  for line in GOGC=400 GOMEMLIMIT=1200MiB PGSSLMODE=disable; do
     on "$host" "grep -q '^${line%%=*}=' ~/env.sh || echo $line >> ~/env.sh"
   done
   # 削除したファイルが残るとビルドが壊れるので、配置前に Go のソースを消す
