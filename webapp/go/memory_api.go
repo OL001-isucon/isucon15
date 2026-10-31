@@ -83,6 +83,11 @@ func listMemories(ctx context.Context, db sqlx.QueryerContext, userID string, st
 	if err != nil {
 		return response, err
 	}
+	// 51 件目は有無だけ分かればよいので、応答を作らない。署名の計算が重い
+	response.HasMore = len(posts) > 50
+	if response.HasMore {
+		posts = posts[:50]
+	}
 	items := make([]memoryPostResponse, 0, len(posts))
 	for _, post := range posts {
 		items = append(items, memoryPostResponse{
@@ -90,10 +95,6 @@ func listMemories(ctx context.Context, db sqlx.QueryerContext, userID string, st
 			RealMojis:          make([]replaceRealMojiResponse, 0),
 			Comments:           make([]createCommentResponse, 0),
 		})
-	}
-	response.HasMore = len(items) > 50
-	if response.HasMore {
-		items = items[:50]
 	}
 	if err := loadMemoryInteractions(ctx, db, items); err != nil {
 		return response, err

@@ -93,23 +93,22 @@ func getFeedHandler(h *HandlerContext) echo.HandlerFunc {
 			})
 		}
 		items := make([]feedItemResponse, 0)
+		hasMore := false
 		for _, post := range candidates {
 			score := scores[post.ID]
 			if ranked && input.BeforeScore != nil && !rankedBefore(score, post.Post, *input.BeforeScore, *input.BeforePostedAt, input.BeforeID) {
 				continue
+			}
+			// 51 件目は有無だけ分かればよいので、応答を作らない。署名の計算が重い
+			if len(items) == 50 {
+				hasMore = true
+				break
 			}
 			item := feedItemResponse{createPostResponse: newPostResponse(post.Post, post.Author)}
 			if ranked {
 				item.Score = &score
 			}
 			items = append(items, item)
-			if len(items) == 51 {
-				break
-			}
-		}
-		hasMore := len(items) > 50
-		if hasMore {
-			items = items[:50]
 		}
 		return c.JSON(http.StatusOK, getFeedResponse{Items: items, HasMore: hasMore})
 	}

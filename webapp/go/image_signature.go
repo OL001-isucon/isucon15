@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"expvar"
 	"fmt"
 	"net/url"
 	"strconv"
@@ -16,10 +17,16 @@ const imageURLLifetime = 24 * time.Hour
 const imageSignatureIterations = 1000
 
 // exp を切り上げて同じ画像の署名を使い回す。寿命は 24 時間を下回らない
-const imageURLExpStepSeconds = 60
+const imageURLExpStepSeconds = 600
 
 // 署名を保持する exp の数。古いものは計算し直せばよいので捨てる
 const imageSignatureCacheBuckets = 16
+
+// localhost:6060/debug/vars で再利用の効果を確かめる
+var (
+	imageSignatureHits   = expvar.NewInt("image_signature_hits")
+	imageSignatureMisses = expvar.NewInt("image_signature_misses")
+)
 
 // imageSignatureCache は exp ごとに署名を持つ。exp が過ぎた分を丸ごと捨てられるようにしている
 type imageSignatureCache struct {
@@ -98,7 +105,10 @@ func signedImageURL(user User, imageID string) string {
 	exp -= exp % imageURLExpStepSeconds
 	cacheKey := imageSignatureCacheKey(user.ImageKey, imageID)
 	sig, ok := imageSignatures.get(cacheKey, exp)
-	if !ok {
+	if ok {
+		imageSignatureHits.Add(1)
+	} else {
+		imageSignatureMisses.Add(1)
 		sig = imageSignature(user.ImageKey, imageID, exp)
 		imageSignatures.put(cacheKey, exp, sig)
 	}
