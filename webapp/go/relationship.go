@@ -3,7 +3,6 @@ package isureal
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"net/http"
 	"time"
 
@@ -41,22 +40,29 @@ func beginRelationshipTx(ctx context.Context, db *sqlx.DB, actor, target string)
 	return tx, nil
 }
 
-// 両者の users 行を ID 順にロックする。ロックを持つ時間がそのまま他の処理の待ち時間になるので、
-// 呼び出し側は読み取りをこの前に済ませ、ロック後は書き込みと COMMIT だけにする
+// 2 人の関係 (申請、友達、フォロー、ブロック) の変更をペア単位で直列にする。
+// users 行をロックすると、その人の投稿やログインまで待たせるので advisory lock を使う
 func lockRelationshipUsers(ctx context.Context, tx *sqlx.Tx, actor, target string) error {
 	if actor == target || target == "" {
 		return NewAPIError(http.StatusBadRequest, "invalid_relationship")
 	}
-	for _, id := range []string{min(actor, target), max(actor, target)} {
-		var lockedID string
-		if err := tx.GetContext(ctx, &lockedID, `SELECT id FROM users WHERE id=$1 AND status='active' FOR NO KEY UPDATE`, id); err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				return NewAPIError(http.StatusNotFound, "relationship_not_found")
-			}
-			return err
-		}
+	var active int
+	if err := tx.GetContext(ctx, &active, `
+  SELECT (SELECT count(*) FROM users WHERE id IN ($1, $2) AND status = 'active')
+  FROM pg_advisory_xact_lock(hashtext($3))
+ `, actor, target, "rel:"+min(actor, target)+":"+max(actor, target)); err != nil {
+		return err
+	}
+	if active != 2 {
+		return NewAPIError(http.StatusNotFound, "relationship_not_found")
 	}
 	return nil
+}
+
+// lockUserSlot は利用者単位の排他 (投稿枠、セッション) を purpose ごとに分けて取る
+func lockUserSlot(ctx context.Context, tx *sqlx.Tx, purpose, userID string) error {
+	_, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtext($1))`, purpose+":"+userID)
+	return err
 }
 
 func isBlocked(ctx context.Context, db sqlx.QueryerContext, actor, target string) (bool, error) {
