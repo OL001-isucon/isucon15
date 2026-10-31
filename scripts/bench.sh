@@ -38,6 +38,10 @@ take_profile() {
   on "$1" "rm -f /tmp/cpu.pprof; curl -fsS -o /tmp/cpu.pprof 'http://localhost:6060/debug/pprof/profile?seconds=$PPROF_SECONDS'"
 }
 
+take_pool_metrics() {
+  on "$1" "bash -s $DB_METRICS_SECONDS" < "$ROOT/remote/pool-metrics.sh"
+}
+
 take_db_metrics() {
   on "$DB_HOST" "sudo DB_NAME=$DB_NAME bash -s $DB_METRICS_SECONDS" < "$ROOT/remote/db-metrics.sh"
 }
@@ -46,6 +50,8 @@ take_db_metrics() {
 collect_db() {
   on "$DB_HOST" "cat /tmp/db-vmstat.txt 2>/dev/null" > "$dir/db-vmstat.txt" || true
   on "$DB_HOST" "cat /tmp/db-waits.txt 2>/dev/null" > "$dir/db-waits.txt" || true
+  on "$DB_HOST" "cat /tmp/db-activity.txt 2>/dev/null" > "$dir/db-activity.txt" || true
+  on "${APP_HOSTS[0]}" "cat /tmp/pool-metrics.txt 2>/dev/null" > "$dir/pool-metrics.txt" || true
   {
     if [ -s "$dir/db-vmstat.txt" ]; then
       # 列名から位置を引く。vmstat の 1 行目は起動からの平均なので飛ばす
@@ -135,6 +141,8 @@ for host in "${APP_HOSTS[@]}"; do
   take_profile "$host" > /dev/null 2>&1 &
   pprof_pids+=($!)
 done
+take_pool_metrics "${APP_HOSTS[0]}" > /dev/null 2>&1 &
+pprof_pids+=($!)
 take_db_metrics > /dev/null 2>&1 &
 pprof_pids+=($!)
 
