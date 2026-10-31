@@ -27,7 +27,7 @@ for ((i = 0; i < seconds; i++)); do
            left(regexp_replace(query, '\s+', ' ', 'g'), 100)
     FROM pg_stat_activity
     WHERE datname = '$DB_NAME' AND state <> 'idle' AND pid <> pg_backend_pid()
-    GROUP BY 2, 3, 6
+    GROUP BY 2, 3, 6, 7
   " >> /tmp/db-activity.txt || true
   sleep 1
 done
