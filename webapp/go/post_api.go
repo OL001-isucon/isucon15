@@ -93,8 +93,7 @@ func createPostHandler(h *HandlerContext) echo.HandlerFunc {
 			return err
 		}
 		defer tx.Rollback()
-		var lockedUserID string
-		if err := tx.GetContext(ctx, &lockedUserID, `SELECT id FROM users WHERE id = $1 FOR NO KEY UPDATE`, userID); err != nil {
+		if err := lockUserSlot(ctx, tx, "post", userID); err != nil {
 			return err
 		}
 		user, err := getUser(ctx, tx, userID)
@@ -275,8 +274,7 @@ func updatePostHandler(h *HandlerContext) echo.HandlerFunc {
 			return err
 		}
 		defer tx.Rollback()
-		var lockedUserID string
-		if err := tx.GetContext(ctx, &lockedUserID, `SELECT id FROM users WHERE id = $1 FOR NO KEY UPDATE`, userID); err != nil {
+		if err := lockUserSlot(ctx, tx, "post", userID); err != nil {
 			return err
 		}
 		post, err := getPost(ctx, tx, input.PostID)
@@ -338,8 +336,7 @@ func deletePostHandler(h *HandlerContext) echo.HandlerFunc {
 			return err
 		}
 		defer tx.Rollback()
-		var lockedUserID string
-		if err := tx.GetContext(ctx, &lockedUserID, `SELECT id FROM users WHERE id = $1 FOR NO KEY UPDATE`, userID); err != nil {
+		if err := lockUserSlot(ctx, tx, "post", userID); err != nil {
 			return err
 		}
 		post, err := getPost(ctx, tx, input.PostID)
