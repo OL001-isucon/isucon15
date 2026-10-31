@@ -16,9 +16,18 @@ type exportPostResponse struct {
 	ImagePath string `json:"imagePath"`
 }
 
+// export は 1 回で DB を 100 ms 使い、数 MB をメモリーへ載せる。投稿が集中する間に資源を奪わないよう同時実行数を絞る
+var exportSlot = make(chan struct{}, 3)
+
 func exportPostsHandler(h *HandlerContext) echo.HandlerFunc {
 	return func(c *echo.Context) error {
 		ctx := c.Request().Context()
+		select {
+		case exportSlot <- struct{}{}:
+			defer func() { <-exportSlot }()
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 		userID := GetSession(c).UserID
 		author, err := getUser(ctx, h.DB, userID)
 		if err != nil {
