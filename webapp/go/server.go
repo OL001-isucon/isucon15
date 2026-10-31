@@ -12,7 +12,9 @@ import (
 )
 
 type HandlerContext struct {
-	DB            *sqlx.DB
+	DB *sqlx.DB
+	// AdminDB は投稿期間の切り替え用の接続。DB の接続待ちの列に並ぶと切り替えと通知が数秒遅れる
+	AdminDB       *sqlx.DB
 	Config        *Config
 	IPBans        *IPBanList
 	Images        *ImageStore
@@ -53,8 +55,16 @@ func NewServer(config *Config) *echo.Echo {
 		panic("failed to ping database: " + err.Error())
 	}
 
+	adminDB, err := sqlx.Open("pgx", config.DatabaseDSN())
+	if err != nil {
+		panic("failed to open database: " + err.Error())
+	}
+	adminDB.SetMaxOpenConns(2)
+	adminDB.SetMaxIdleConns(2)
+
 	handlerContext := &HandlerContext{
 		DB:            db,
+		AdminDB:       adminDB,
 		Config:        config,
 		IPBans:        &IPBanList{},
 		Images:        NewImageStore(config),
