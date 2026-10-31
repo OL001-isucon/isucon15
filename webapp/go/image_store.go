@@ -51,14 +51,42 @@ type ImageStore struct {
 	node   string
 	token  string
 	client *http.Client
+	// primary はリージョンの代表ノード (regionNodes の先頭)。それ以外のノード (asia2) は DB と同じホストなので
+	// 配布された画像を保存せず、要求のたびに代表ノードから取って返す
+	primary bool
+}
+
+// primaryNode はそのノードがリージョンの代表 (画像を保存して配る側) かを返す
+func primaryNode(node string) bool {
+	for _, nodes := range regionNodes {
+		for i, candidate := range nodes {
+			if candidate == node {
+				return i == 0
+			}
+		}
+	}
+	return true
+}
+
+// regionPrimary はノードが属するリージョンの代表ノードを返す
+func regionPrimary(node string) string {
+	for _, nodes := range regionNodes {
+		for _, candidate := range nodes {
+			if candidate == node {
+				return nodes[0]
+			}
+		}
+	}
+	return node
 }
 
 func NewImageStore(config *Config) *ImageStore {
 	hash := sha256.Sum256([]byte("isureal-internal:" + config.DBPassword))
 	return &ImageStore{
-		root:  config.ImageDir,
-		node:  config.Node,
-		token: hex.EncodeToString(hash[:]),
+		root:    config.ImageDir,
+		node:    config.Node,
+		primary: primaryNode(config.Node),
+		token:   hex.EncodeToString(hash[:]),
 		client: &http.Client{
 			Timeout:   imageTransferTimeout,
 			Transport: &http.Transport{MaxIdleConnsPerHost: 16, IdleConnTimeout: 90 * time.Second},
@@ -100,9 +128,10 @@ func writeImageFile(path string, data []byte, durable bool) error {
 	return os.Rename(tmp.Name(), path)
 }
 
-// SaveNew は再起動後も読めるよう fsync してから戻る。ロックを持つ時間を延ばさないよう、トランザクションの前に呼ぶ
+// SaveNew は再起動後も読めるよう fsync してから戻る。ロックを持つ時間を延ばさないよう、トランザクションの前に呼ぶ。
+// 代表でないノードは配布先の控えがあるので fsync しない
 func (s *ImageStore) SaveNew(imageID string, data []byte) error {
-	return writeImageFile(s.newPath(imageID), data, true)
+	return writeImageFile(s.newPath(imageID), data, s.primary)
 }
 
 // LoadNew は手元に無ければ保存元のリージョンから取得する。配布が届く前の読み取りはここで救う
@@ -117,6 +146,16 @@ func (s *ImageStore) LoadNew(ctx context.Context, imageID string, originRegion *
 	}
 	if originRegion == nil || *originRegion == s.node {
 		return nil, fmt.Errorf("image %s is missing", imageID)
+	}
+	if !s.primary {
+		// 保存せず、同一リージョンの代表ノードから取って返す。届いていなければ保存元へ
+		primary := regionPrimary(s.node)
+		if primary != *originRegion {
+			if data, err := s.fetchFromRegion(ctx, primary, imageID); err == nil {
+				return data, nil
+			}
+		}
+		return s.fetchFromRegion(ctx, *originRegion, imageID)
 	}
 	data, err = s.fetchFromRegion(ctx, *originRegion, imageID)
 	if err != nil {
@@ -176,7 +215,7 @@ func (s *ImageStore) fetchFromRegion(ctx context.Context, node, imageID string) 
 // Distribute は裏で他のリージョンへ配る。失敗しても読み取り時に保存元から取得できる
 func (s *ImageStore) Distribute(imageID string, data []byte) {
 	for node := range nodeHosts {
-		if node == s.node {
+		if node == s.node || !primaryNode(node) {
 			continue
 		}
 		go func() {
@@ -281,6 +320,9 @@ func putInternalImageHandler(h *HandlerContext) echo.HandlerFunc {
 		data, err := io.ReadAll(http.MaxBytesReader(c.Response(), c.Request().Body, maxInternalImageSize))
 		if err != nil {
 			return err
+		}
+		if !h.Images.primary {
+			return c.NoContent(http.StatusNoContent)
 		}
 		if err := h.Images.SaveNew(imageID, data); err != nil {
 			return err
