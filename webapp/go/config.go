@@ -29,8 +29,9 @@ func ConfigFromEnv() *Config {
 		DBUser:     envOrDefault("ISUREAL_DB_USER", "isureal"),
 		DBPassword: envOrDefault("ISUREAL_DB_PASSWORD", "isureal"),
 		DBName:     envOrDefault("ISUREAL_DB_NAME", "isureal"),
-		LogLevel:   envOrDefault("ISUREAL_LOG_LEVEL", "debug"),
-		ImageDir:   envOrDefault("ISUREAL_IMAGE_DIR", "/home/isucon/image-cache"),
+		// debug は成功した GET で、ログの 7 割を占める。不正アクセスの記録は info 以上に残る
+		LogLevel: envOrDefault("ISUREAL_LOG_LEVEL", "info"),
+		ImageDir: envOrDefault("ISUREAL_IMAGE_DIR", "/home/isucon/image-cache"),
 	}
 }
 
@@ -40,6 +41,8 @@ func (c *Config) DatabaseDSN() string {
 		User:   url.UserPassword(c.DBUser, c.DBPassword),
 		Host:   net.JoinHostPort(c.DBHost, c.DBPort),
 		Path:   "/" + c.DBName,
+		// DB はチーム内の private IP でしか使わない。TLS の CPU を処理に回す
+		RawQuery: "sslmode=disable",
 	}
 	return u.String()
 }

@@ -3,6 +3,7 @@ package isureal
 import (
 	"expvar"
 	"os"
+	"runtime/debug"
 
 	"github.com/jmoiron/sqlx"
 	"github.com/labstack/echo/v5"
@@ -23,6 +24,14 @@ func NewServer(config *Config) *echo.Echo {
 	if !validRegion(config.Region) {
 		panic("invalid server region: " + config.Region)
 	}
+	// GC の回数を減らして CPU を処理に回す。asia2 は DB とメモリを分け合うので上限を低くする
+	debug.SetGCPercent(400)
+	memoryLimit := int64(2 << 30)
+	if config.Node == "asia2" {
+		memoryLimit = 1 << 30
+	}
+	debug.SetMemoryLimit(memoryLimit)
+
 	e := echo.New()
 	e.IPExtractor = extractClientIP
 
