@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"net/url"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 )
@@ -95,5 +96,24 @@ func BenchmarkImageSignature(b *testing.B) {
 	key := bytes.Repeat([]byte{0x5a}, sha256.Size)
 	for range b.N {
 		imageSignature(key, "33333333-3333-4333-8333-333333333333", 1793000000)
+	}
+}
+
+func TestLimitedImageSignatureRunsOneAtATime(t *testing.T) {
+	key := bytes.Repeat([]byte{0x44}, sha256.Size)
+	want := referenceImageSignature(key, "concurrent", 1793000160)
+	var wg sync.WaitGroup
+	for range 8 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if got := limitedImageSignature("unused", key, "concurrent", 1793000160); !bytes.Equal(got, want) {
+				t.Error("signature differs")
+			}
+		}()
+	}
+	wg.Wait()
+	if len(imageSignatureSlot) != 0 {
+		t.Error("slot was not released")
 	}
 }
