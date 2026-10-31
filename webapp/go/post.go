@@ -101,6 +101,12 @@ type viewerContext struct {
 }
 
 func loadViewerContext(ctx context.Context, db sqlx.QueryerContext, viewerID string) (viewerContext, error) {
+	return loadViewerContextOpts(ctx, db, viewerID, true)
+}
+
+// loadViewerContextOpts は friendsOfFriends が false なら友達の友達を読まない。
+// 友達と公開のフィードは著者が友達か公開範囲が public なので、友達の友達の判定が要らない
+func loadViewerContextOpts(ctx context.Context, db sqlx.QueryerContext, viewerID string, friendsOfFriends bool) (viewerContext, error) {
 	viewer := viewerContext{Friends: map[string]bool{}, FriendsOfFriends: map[string]bool{}, MutualFriends: map[string]int{}}
 	var err error
 	if viewer.User, err = getUser(ctx, db, viewerID); err != nil {
@@ -124,11 +130,11 @@ func loadViewerContext(ctx context.Context, db sqlx.QueryerContext, viewerID str
 	if err != nil {
 		return viewer, err
 	}
-	if len(friends) == 0 {
-		return viewer, nil
-	}
 	for _, id := range friends {
 		viewer.Friends[id] = true
+	}
+	if len(friends) == 0 || !friendsOfFriends {
+		return viewer, nil
 	}
 	query, args, err := sqlx.In(`SELECT user_low_id, user_high_id FROM friendships WHERE user_low_id IN (?) OR user_high_id IN (?)`, friends, friends)
 	if err != nil {
