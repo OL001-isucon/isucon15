@@ -14,24 +14,26 @@ for pattern in "${PULL_EXCLUDES[@]}"; do
 done
 
 # 10MB 以上はバイナリや初期データなので取り込まず、一覧だけ表示する
+# env.sh は DB のパスワードを含み、リージョンごとに値が違うので取り込まない
 echo "== webapp ($webapp_host)"
 on "$webapp_host" "find webapp -type f -size +10M $find_excludes" | sed 's/^/skip: /'
-on "$webapp_host" "find webapp env.sh -type f -size -10M $find_excludes 2>/dev/null | tar czf - -T -" | tar xzf -
+on "$webapp_host" "find webapp -type f -size -10M $find_excludes 2>/dev/null | tar czf - -T -" | tar xzf -
 
-# 秘密鍵と DB の管理用パスワードは取り込まない
+# 秘密鍵は取り込まない
 # 計測用の設定も取り込まない。取り込むと logging.sh off の後のデプロイで復活する
 # Windows では symlink を展開できないので実体化する。リンク切れなどの警告では止めない
 for host in "${HOSTS[@]}"; do
   echo "== config ($host)"
   mkdir -p "servers/$host"
   on "$host" "cd / && { sudo tar czf - --dereference --ignore-failed-read --warning=no-file-changed \
-    --exclude='*.key' --exclude='*.pem' --exclude='*.crt' --exclude='etc/mysql/debian.cnf' \
-    --exclude='etc/nginx/conf.d/00-isucon-ltsv.conf' --exclude='etc/mysql/conf.d/zz-isucon-slow.cnf' \
-    etc/nginx etc/mysql etc/sysctl.d etc/systemd/system/$APP_SERVICE; true; }" | tar xzf - -C "servers/$host"
+    --exclude='*.key' --exclude='*.pem' --exclude='*.crt' \
+    --exclude='etc/nginx/conf.d/00-isucon-ltsv.conf' \
+    etc/nginx etc/postgresql etc/sysctl.d etc/systemd/system/$APP_SERVICE; true; }" | tar xzf - -C "servers/$host"
 done
 
-if [ ! -f "$APP_DIR/pprof.go" ] && [ -d "$APP_DIR" ]; then
-  cp templates/pprof.go "$APP_DIR/pprof.go"
+pprof_file="$APP_DIR/$APP_MAIN_PKG/pprof.go"
+if [ ! -f "$pprof_file" ] && [ -d "$APP_DIR" ]; then
+  cp templates/pprof.go "$pprof_file"
 fi
 
 git add -A

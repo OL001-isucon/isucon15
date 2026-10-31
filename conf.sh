@@ -1,7 +1,8 @@
 # 当日に問題を見て埋める設定。トークンやパスワード以外の秘密情報は書かない
 
 # ssh_config の Host 名
-HOSTS=(isu1 isu2 isu3)
+# router はログイン禁止なので入れない
+HOSTS=(asia1 europe1 america1 asia2)
 
 # サーバーの役割。分割するまでは空のままにして、各スクリプトに -s でサーバーを指定する
 WEB_HOST=
@@ -9,16 +10,16 @@ APP_HOST=
 DB_HOST=
 
 # アプリ(問題が公開されたら書き換える)
-APP_SERVICE=isuride-go.service
-APP_BIN=isuride
+APP_SERVICE=isureal-go.service
+APP_BIN=isureal
 APP_DIR=webapp/go
-GO_BIN_DIR=/home/isucon/local/golang/bin
+# main パッケージの場所。APP_DIR からの相対パス
+APP_MAIN_PKG=./cmd/isureal
+GO_BIN_DIR=/home/isucon/local/go/bin
 
 # DB(問題が公開されたら書き換える)
-DB_USER=isucon
-DB_PASSWORD=isucon
-DB_NAME=isuride
-SCHEMA_FILE=webapp/sql/1-schema.sql
+DB_NAME=isureal
+SCHEMA_FILE=webapp/sql/001-schema.sql
 
 # ログ
 ACCESS_LOG=/var/log/nginx/access_ltsv.log
@@ -38,6 +39,8 @@ GITHUB_REPO=OL001-isucon/isucon15
 PULL_EXCLUDES=(
   '*/node_modules/*'
   '*/.git/*'
+  '*/._*'
+  '*/AGENTS.md'
   'webapp/frontend/*'
   'webapp/public/*'
   'webapp/nodejs/*'

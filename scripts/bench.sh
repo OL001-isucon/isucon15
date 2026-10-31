@@ -48,7 +48,7 @@ if [ "$pprof_ok" = true ]; then
   on "$APP_HOST" "PATH=$GO_BIN_DIR:\$PATH go tool pprof -top -cum /tmp/cpu.pprof 2>/dev/null" > "$dir/pprof-cum.txt"
   on "$APP_HOST" "cat /tmp/cpu.pprof" > "$dir/cpu.pprof"
 else
-  echo "CPU プロファイルを取得できませんでした。$APP_DIR/pprof.go を確認してください" | tee "$dir/pprof-top.txt" >&2
+  echo "CPU プロファイルを取得できませんでした。$APP_DIR/$APP_MAIN_PKG/pprof.go を確認してください" | tee "$dir/pprof-top.txt" >&2
 fi
 
 deployed=$(on "$APP_HOST" "cat ~/DEPLOYED 2>/dev/null || echo unknown")

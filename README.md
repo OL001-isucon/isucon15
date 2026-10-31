@@ -78,7 +78,7 @@ ID を含むパスは `etc/alp.yml` の `matching_groups` に追記する。次�
 ## 提出前
 
 ```bash
-git rm webapp/go/pprof.go   # commit して deploy する
+git rm webapp/go/cmd/isureal/pprof.go   # commit して deploy する
 bash scripts/logging.sh off  # -s を省略すると全サーバーが対象
 ```
 

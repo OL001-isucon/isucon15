@@ -23,7 +23,7 @@ on "$APP_HOST" "tar xf -" < "$archive"
 # Windows でコミットすると実行権限が落ち、/initialize の init.sh が動かなくなる
 on "$APP_HOST" "find $APP_DIR $sql_dir -name '*.sh' -exec chmod +x {} +"
 
-on "$APP_HOST" "cd $APP_DIR && PATH=$GO_BIN_DIR:\$PATH go build -o $APP_BIN ."
+on "$APP_HOST" "cd $APP_DIR && PATH=$GO_BIN_DIR:\$PATH go build -o $APP_BIN $APP_MAIN_PKG"
 on "$APP_HOST" "echo '$ref $commit' > ~/DEPLOYED"
 
 for host in "${HOSTS[@]}"; do
