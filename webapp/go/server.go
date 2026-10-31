@@ -43,6 +43,7 @@ func NewServer(config *Config) *echo.Echo {
 		maxConns = 25
 	}
 	db.SetMaxOpenConns(maxConns)
+	sessions.enabled = config.Region != "asia"
 	// 既定の 2 本だと接続を毎回張り直す。リージョン間では TLS の往復が重い
 	db.SetMaxIdleConns(maxConns)
 	// localhost:6060/debug/vars で接続プールの待ちを確認する
