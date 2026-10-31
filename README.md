@@ -70,18 +70,19 @@ bash scripts/deploy.sh -s asia2   # asia2 の設定だけ反映する
 
 ## スキーマ変更
 
-`webapp/sql/001-schema.sql` を編集する。**DB へ直接 ALTER しない。**
+`webapp/sql/` の番号付きファイルを `/api/initialize` が名前順に**毎回すべて**流し、そのあと `reset.sql` でデータを戻す。変更は新しい番号のファイルを足すか、既存のファイルに追記する。**DB へ直接 ALTER しない。**
 
-`/api/initialize` の `reset.sql` はデータしか戻さないので、スキーマの変更はベンチを実行しても反映されない。sqldef で適用する。
-
-```bash
-bash scripts/migrate.sh           # 差分の確認
-bash scripts/migrate.sh --apply   # 適用
+```sql
+-- webapp/sql/004_add_hoge.sql
+CREATE INDEX IF NOT EXISTS posts_posted_at ON posts(posted_at);
+ALTER TABLE posts ADD COLUMN IF NOT EXISTS like_count integer NOT NULL DEFAULT 0;
 ```
 
-`migrate.sh` はスキーマを一時 DB に流して定義を取り出し、本番の DB と比較する。DROP は表示だけで実行しない。`image_objects` の子パーティションは比較しないので、変更するときは別途 SQL を流す。
-
-追加したテーブルやキャッシュに初期データとの差が出るなら、`webapp/sql/reset.sql` や初期化処理にも戻す処理を入れる。
+- **`DROP` は絶対に書かない。** 初期データの投入元はサーバーに無く、消すと復元できない
+- 毎回流れるので、2 回目以降は何も変えない書き方にする。`IF NOT EXISTS` が使えない文は `DO` で存在を確認する。`UPDATE` も何度流しても結果が同じになるように書く
+- `posts` や `image_objects` などの大きいテーブルへの変更は、初回の初期化に時間がかかり、制限時間を超えると FAIL する。デプロイ後、ベンチの前に asia1 で `~/webapp/sql/init.sh` を 1 回実行して適用しておく
+- DB は全員で共有しているので、適用した変更はブランチに関係なく全員の環境に効き、自動では戻らない
+- 追加した列やテーブルに初期データとの差が出るなら、`reset.sql` にも戻す処理を入れる
 
 ## alp の集約
 

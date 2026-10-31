@@ -1,25 +1,5 @@
-DROP TABLE IF EXISTS
-  ip_bans,
-  notifications,
-  comments,
-  realmojis,
-  friend_requests,
-  posts,
-  posting_windows,
-  app_settings,
-  worker_jobs,
-  idempotency_records,
-  block_relations,
-  follows,
-  friendships,
-  administrator_sessions,
-  login_sessions,
-  administrators,
-  users,
-  image_objects;
-
 -- 2026-09-01: 画像をDBにおかないと、別のサーバーからデータを返却したときに404になってしまう。ファイル配置に変更して障害になってしまったので注意。ここは決して変更しないこと。
-CREATE TABLE image_objects (
+CREATE TABLE IF NOT EXISTS image_objects (
   id varchar(36) NOT NULL,
   owner_user_id varchar(36) NOT NULL,
   data bytea NOT NULL,
@@ -28,44 +8,44 @@ CREATE TABLE image_objects (
   created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
   PRIMARY KEY (id, created_at)
 ) PARTITION BY RANGE (created_at);
-CREATE TABLE image_objects_202409 PARTITION OF image_objects FOR VALUES FROM ('2024-09-01 00:00:00+00') TO ('2024-10-01 00:00:00+00');
-CREATE TABLE image_objects_202410 PARTITION OF image_objects FOR VALUES FROM ('2024-10-01 00:00:00+00') TO ('2024-11-01 00:00:00+00');
-CREATE TABLE image_objects_202411 PARTITION OF image_objects FOR VALUES FROM ('2024-11-01 00:00:00+00') TO ('2024-12-01 00:00:00+00');
-CREATE TABLE image_objects_202412 PARTITION OF image_objects FOR VALUES FROM ('2024-12-01 00:00:00+00') TO ('2025-01-01 00:00:00+00');
-CREATE TABLE image_objects_202501 PARTITION OF image_objects FOR VALUES FROM ('2025-01-01 00:00:00+00') TO ('2025-02-01 00:00:00+00');
-CREATE TABLE image_objects_202502 PARTITION OF image_objects FOR VALUES FROM ('2025-02-01 00:00:00+00') TO ('2025-03-01 00:00:00+00');
-CREATE TABLE image_objects_202503 PARTITION OF image_objects FOR VALUES FROM ('2025-03-01 00:00:00+00') TO ('2025-04-01 00:00:00+00');
-CREATE TABLE image_objects_202504 PARTITION OF image_objects FOR VALUES FROM ('2025-04-01 00:00:00+00') TO ('2025-05-01 00:00:00+00');
-CREATE TABLE image_objects_202505 PARTITION OF image_objects FOR VALUES FROM ('2025-05-01 00:00:00+00') TO ('2025-06-01 00:00:00+00');
-CREATE TABLE image_objects_202506 PARTITION OF image_objects FOR VALUES FROM ('2025-06-01 00:00:00+00') TO ('2025-07-01 00:00:00+00');
-CREATE TABLE image_objects_202507 PARTITION OF image_objects FOR VALUES FROM ('2025-07-01 00:00:00+00') TO ('2025-08-01 00:00:00+00');
-CREATE TABLE image_objects_202508 PARTITION OF image_objects FOR VALUES FROM ('2025-08-01 00:00:00+00') TO ('2025-09-01 00:00:00+00');
-CREATE TABLE image_objects_202509 PARTITION OF image_objects FOR VALUES FROM ('2025-09-01 00:00:00+00') TO ('2025-10-01 00:00:00+00');
-CREATE TABLE image_objects_202510 PARTITION OF image_objects FOR VALUES FROM ('2025-10-01 00:00:00+00') TO ('2025-11-01 00:00:00+00');
-CREATE TABLE image_objects_202511 PARTITION OF image_objects FOR VALUES FROM ('2025-11-01 00:00:00+00') TO ('2025-12-01 00:00:00+00');
-CREATE TABLE image_objects_202512 PARTITION OF image_objects FOR VALUES FROM ('2025-12-01 00:00:00+00') TO ('2026-01-01 00:00:00+00');
-CREATE TABLE image_objects_202601 PARTITION OF image_objects FOR VALUES FROM ('2026-01-01 00:00:00+00') TO ('2026-02-01 00:00:00+00');
-CREATE TABLE image_objects_202602 PARTITION OF image_objects FOR VALUES FROM ('2026-02-01 00:00:00+00') TO ('2026-03-01 00:00:00+00');
-CREATE TABLE image_objects_202603 PARTITION OF image_objects FOR VALUES FROM ('2026-03-01 00:00:00+00') TO ('2026-04-01 00:00:00+00');
-CREATE TABLE image_objects_202604 PARTITION OF image_objects FOR VALUES FROM ('2026-04-01 00:00:00+00') TO ('2026-05-01 00:00:00+00');
-CREATE TABLE image_objects_202605 PARTITION OF image_objects FOR VALUES FROM ('2026-05-01 00:00:00+00') TO ('2026-06-01 00:00:00+00');
-CREATE TABLE image_objects_202606 PARTITION OF image_objects FOR VALUES FROM ('2026-06-01 00:00:00+00') TO ('2026-07-01 00:00:00+00');
-CREATE TABLE image_objects_202607 PARTITION OF image_objects FOR VALUES FROM ('2026-07-01 00:00:00+00') TO ('2026-08-01 00:00:00+00');
-CREATE TABLE image_objects_202608 PARTITION OF image_objects FOR VALUES FROM ('2026-08-01 00:00:00+00') TO ('2026-09-01 00:00:00+00');
-CREATE TABLE image_objects_202609 PARTITION OF image_objects FOR VALUES FROM ('2026-09-01 00:00:00+00') TO ('2026-10-01 00:00:00+00');
-CREATE TABLE image_objects_202610 PARTITION OF image_objects FOR VALUES FROM ('2026-10-01 00:00:00+00') TO ('2026-10-28 06:00:00+00');
-CREATE TABLE image_objects_20261028 PARTITION OF image_objects FOR VALUES FROM ('2026-10-28 06:00:00+00') TO ('2026-11-01 00:00:00+00');
-CREATE TABLE image_objects_202611 PARTITION OF image_objects FOR VALUES FROM ('2026-11-01 00:00:00+00') TO ('2026-12-01 00:00:00+00');
-CREATE TABLE image_objects_202612 PARTITION OF image_objects FOR VALUES FROM ('2026-12-01 00:00:00+00') TO ('2027-01-01 00:00:00+00');
-CREATE TABLE image_objects_202701 PARTITION OF image_objects FOR VALUES FROM ('2027-01-01 00:00:00+00') TO ('2027-02-01 00:00:00+00');
-CREATE TABLE image_objects_202702 PARTITION OF image_objects FOR VALUES FROM ('2027-02-01 00:00:00+00') TO ('2027-03-01 00:00:00+00');
-CREATE TABLE image_objects_202703 PARTITION OF image_objects FOR VALUES FROM ('2027-03-01 00:00:00+00') TO ('2027-04-01 00:00:00+00');
-CREATE TABLE image_objects_202704 PARTITION OF image_objects FOR VALUES FROM ('2027-04-01 00:00:00+00') TO ('2027-05-01 00:00:00+00');
-CREATE TABLE image_objects_202705 PARTITION OF image_objects FOR VALUES FROM ('2027-05-01 00:00:00+00') TO ('2027-06-01 00:00:00+00');
-CREATE TABLE image_objects_202706 PARTITION OF image_objects FOR VALUES FROM ('2027-06-01 00:00:00+00') TO ('2027-07-01 00:00:00+00');
-CREATE TABLE image_objects_default PARTITION OF image_objects DEFAULT;
+CREATE TABLE IF NOT EXISTS image_objects_202409 PARTITION OF image_objects FOR VALUES FROM ('2024-09-01 00:00:00+00') TO ('2024-10-01 00:00:00+00');
+CREATE TABLE IF NOT EXISTS image_objects_202410 PARTITION OF image_objects FOR VALUES FROM ('2024-10-01 00:00:00+00') TO ('2024-11-01 00:00:00+00');
+CREATE TABLE IF NOT EXISTS image_objects_202411 PARTITION OF image_objects FOR VALUES FROM ('2024-11-01 00:00:00+00') TO ('2024-12-01 00:00:00+00');
+CREATE TABLE IF NOT EXISTS image_objects_202412 PARTITION OF image_objects FOR VALUES FROM ('2024-12-01 00:00:00+00') TO ('2025-01-01 00:00:00+00');
+CREATE TABLE IF NOT EXISTS image_objects_202501 PARTITION OF image_objects FOR VALUES FROM ('2025-01-01 00:00:00+00') TO ('2025-02-01 00:00:00+00');
+CREATE TABLE IF NOT EXISTS image_objects_202502 PARTITION OF image_objects FOR VALUES FROM ('2025-02-01 00:00:00+00') TO ('2025-03-01 00:00:00+00');
+CREATE TABLE IF NOT EXISTS image_objects_202503 PARTITION OF image_objects FOR VALUES FROM ('2025-03-01 00:00:00+00') TO ('2025-04-01 00:00:00+00');
+CREATE TABLE IF NOT EXISTS image_objects_202504 PARTITION OF image_objects FOR VALUES FROM ('2025-04-01 00:00:00+00') TO ('2025-05-01 00:00:00+00');
+CREATE TABLE IF NOT EXISTS image_objects_202505 PARTITION OF image_objects FOR VALUES FROM ('2025-05-01 00:00:00+00') TO ('2025-06-01 00:00:00+00');
+CREATE TABLE IF NOT EXISTS image_objects_202506 PARTITION OF image_objects FOR VALUES FROM ('2025-06-01 00:00:00+00') TO ('2025-07-01 00:00:00+00');
+CREATE TABLE IF NOT EXISTS image_objects_202507 PARTITION OF image_objects FOR VALUES FROM ('2025-07-01 00:00:00+00') TO ('2025-08-01 00:00:00+00');
+CREATE TABLE IF NOT EXISTS image_objects_202508 PARTITION OF image_objects FOR VALUES FROM ('2025-08-01 00:00:00+00') TO ('2025-09-01 00:00:00+00');
+CREATE TABLE IF NOT EXISTS image_objects_202509 PARTITION OF image_objects FOR VALUES FROM ('2025-09-01 00:00:00+00') TO ('2025-10-01 00:00:00+00');
+CREATE TABLE IF NOT EXISTS image_objects_202510 PARTITION OF image_objects FOR VALUES FROM ('2025-10-01 00:00:00+00') TO ('2025-11-01 00:00:00+00');
+CREATE TABLE IF NOT EXISTS image_objects_202511 PARTITION OF image_objects FOR VALUES FROM ('2025-11-01 00:00:00+00') TO ('2025-12-01 00:00:00+00');
+CREATE TABLE IF NOT EXISTS image_objects_202512 PARTITION OF image_objects FOR VALUES FROM ('2025-12-01 00:00:00+00') TO ('2026-01-01 00:00:00+00');
+CREATE TABLE IF NOT EXISTS image_objects_202601 PARTITION OF image_objects FOR VALUES FROM ('2026-01-01 00:00:00+00') TO ('2026-02-01 00:00:00+00');
+CREATE TABLE IF NOT EXISTS image_objects_202602 PARTITION OF image_objects FOR VALUES FROM ('2026-02-01 00:00:00+00') TO ('2026-03-01 00:00:00+00');
+CREATE TABLE IF NOT EXISTS image_objects_202603 PARTITION OF image_objects FOR VALUES FROM ('2026-03-01 00:00:00+00') TO ('2026-04-01 00:00:00+00');
+CREATE TABLE IF NOT EXISTS image_objects_202604 PARTITION OF image_objects FOR VALUES FROM ('2026-04-01 00:00:00+00') TO ('2026-05-01 00:00:00+00');
+CREATE TABLE IF NOT EXISTS image_objects_202605 PARTITION OF image_objects FOR VALUES FROM ('2026-05-01 00:00:00+00') TO ('2026-06-01 00:00:00+00');
+CREATE TABLE IF NOT EXISTS image_objects_202606 PARTITION OF image_objects FOR VALUES FROM ('2026-06-01 00:00:00+00') TO ('2026-07-01 00:00:00+00');
+CREATE TABLE IF NOT EXISTS image_objects_202607 PARTITION OF image_objects FOR VALUES FROM ('2026-07-01 00:00:00+00') TO ('2026-08-01 00:00:00+00');
+CREATE TABLE IF NOT EXISTS image_objects_202608 PARTITION OF image_objects FOR VALUES FROM ('2026-08-01 00:00:00+00') TO ('2026-09-01 00:00:00+00');
+CREATE TABLE IF NOT EXISTS image_objects_202609 PARTITION OF image_objects FOR VALUES FROM ('2026-09-01 00:00:00+00') TO ('2026-10-01 00:00:00+00');
+CREATE TABLE IF NOT EXISTS image_objects_202610 PARTITION OF image_objects FOR VALUES FROM ('2026-10-01 00:00:00+00') TO ('2026-10-28 06:00:00+00');
+CREATE TABLE IF NOT EXISTS image_objects_20261028 PARTITION OF image_objects FOR VALUES FROM ('2026-10-28 06:00:00+00') TO ('2026-11-01 00:00:00+00');
+CREATE TABLE IF NOT EXISTS image_objects_202611 PARTITION OF image_objects FOR VALUES FROM ('2026-11-01 00:00:00+00') TO ('2026-12-01 00:00:00+00');
+CREATE TABLE IF NOT EXISTS image_objects_202612 PARTITION OF image_objects FOR VALUES FROM ('2026-12-01 00:00:00+00') TO ('2027-01-01 00:00:00+00');
+CREATE TABLE IF NOT EXISTS image_objects_202701 PARTITION OF image_objects FOR VALUES FROM ('2027-01-01 00:00:00+00') TO ('2027-02-01 00:00:00+00');
+CREATE TABLE IF NOT EXISTS image_objects_202702 PARTITION OF image_objects FOR VALUES FROM ('2027-02-01 00:00:00+00') TO ('2027-03-01 00:00:00+00');
+CREATE TABLE IF NOT EXISTS image_objects_202703 PARTITION OF image_objects FOR VALUES FROM ('2027-03-01 00:00:00+00') TO ('2027-04-01 00:00:00+00');
+CREATE TABLE IF NOT EXISTS image_objects_202704 PARTITION OF image_objects FOR VALUES FROM ('2027-04-01 00:00:00+00') TO ('2027-05-01 00:00:00+00');
+CREATE TABLE IF NOT EXISTS image_objects_202705 PARTITION OF image_objects FOR VALUES FROM ('2027-05-01 00:00:00+00') TO ('2027-06-01 00:00:00+00');
+CREATE TABLE IF NOT EXISTS image_objects_202706 PARTITION OF image_objects FOR VALUES FROM ('2027-06-01 00:00:00+00') TO ('2027-07-01 00:00:00+00');
+CREATE TABLE IF NOT EXISTS image_objects_default PARTITION OF image_objects DEFAULT;
 
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
   id varchar(36) PRIMARY KEY,
   username varchar(64) NOT NULL,
   secret_key_hash text NOT NULL,
@@ -82,18 +62,24 @@ CREATE TABLE users (
   created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
   updated_at timestamptz NOT NULL DEFAULT clock_timestamp()
 );
-ALTER TABLE image_objects ADD CONSTRAINT image_objects_owner_fk FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE RESTRICT;
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'image_objects_owner_fk') THEN
+    ALTER TABLE image_objects ADD CONSTRAINT image_objects_owner_fk FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE RESTRICT;
+  END IF;
+END
+$$;
 
 -- 2026-09-10 管理者を消す時のオペレーションはどうすればよいですか？
 -- 2026-09-13 消すことは想定されていません
-CREATE TABLE administrators (
+CREATE TABLE IF NOT EXISTS administrators (
   id varchar(36) PRIMARY KEY,
   username varchar(64) NOT NULL,
   password_hash text NOT NULL,
   created_at timestamptz NOT NULL DEFAULT clock_timestamp()
 );
 
-CREATE TABLE login_sessions (
+CREATE TABLE IF NOT EXISTS login_sessions (
   id varchar(36) PRIMARY KEY,
   user_id varchar(36) NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
   token_hash text NOT NULL,
@@ -103,7 +89,7 @@ CREATE TABLE login_sessions (
   reason text
 );
 
-CREATE TABLE administrator_sessions (
+CREATE TABLE IF NOT EXISTS administrator_sessions (
   id varchar(36) PRIMARY KEY,
   administrator_id varchar(36) NOT NULL REFERENCES administrators(id) ON DELETE RESTRICT,
   token_hash text NOT NULL,
@@ -112,7 +98,7 @@ CREATE TABLE administrator_sessions (
   invalidated_at timestamptz
 );
 
-CREATE TABLE friendships (
+CREATE TABLE IF NOT EXISTS friendships (
   id varchar(36) PRIMARY KEY,
   user_low_id varchar(36) NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
   user_high_id varchar(36) NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
@@ -122,7 +108,7 @@ CREATE TABLE friendships (
   UNIQUE(user_low_id,user_high_id)
 );
 
-CREATE TABLE follows (
+CREATE TABLE IF NOT EXISTS follows (
   id varchar(36) PRIMARY KEY,
   follower_id varchar(36) NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
   followee_id varchar(36) NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
@@ -131,7 +117,7 @@ CREATE TABLE follows (
   UNIQUE(follower_id,followee_id)
 );
 
-CREATE TABLE block_relations (
+CREATE TABLE IF NOT EXISTS block_relations (
   id varchar(36) PRIMARY KEY,
   blocker_id varchar(36) NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
   blocked_id varchar(36) NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
@@ -139,7 +125,7 @@ CREATE TABLE block_relations (
   UNIQUE(blocker_id,blocked_id)
 );
 
-CREATE TABLE posting_windows (
+CREATE TABLE IF NOT EXISTS posting_windows (
   id varchar(36) PRIMARY KEY,
   region text NOT NULL,
   local_date date NOT NULL,
@@ -149,9 +135,9 @@ CREATE TABLE posting_windows (
   created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
   UNIQUE(region,local_date)
 );
-CREATE UNIQUE INDEX posting_windows_one_active_region ON posting_windows(region) WHERE ended_at IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS posting_windows_one_active_region ON posting_windows(region) WHERE ended_at IS NULL;
 
-CREATE TABLE posts (
+CREATE TABLE IF NOT EXISTS posts (
   id varchar(36) PRIMARY KEY,
   author_id varchar(36) NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
   posting_window_id varchar(36) NOT NULL REFERENCES posting_windows(id) ON DELETE RESTRICT,
@@ -166,10 +152,10 @@ CREATE TABLE posts (
   created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
   deleted_at timestamptz
 );
-CREATE INDEX posts_author_id ON posts(author_id);
-CREATE INDEX posts_posting_window_id ON posts(posting_window_id);
+CREATE INDEX IF NOT EXISTS posts_author_id ON posts(author_id);
+CREATE INDEX IF NOT EXISTS posts_posting_window_id ON posts(posting_window_id);
 
-CREATE TABLE friend_requests (
+CREATE TABLE IF NOT EXISTS friend_requests (
   id varchar(36) PRIMARY KEY,
   requester_id varchar(36) NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
   recipient_id varchar(36) NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
@@ -178,7 +164,7 @@ CREATE TABLE friend_requests (
   updated_at timestamptz NOT NULL
 );
 
-CREATE TABLE realmojis (
+CREATE TABLE IF NOT EXISTS realmojis (
   id varchar(36) PRIMARY KEY,
   post_id varchar(36) NOT NULL REFERENCES posts(id) ON DELETE RESTRICT,
   reactor_id varchar(36) NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
@@ -188,10 +174,10 @@ CREATE TABLE realmojis (
   replaced_at timestamptz,
   deleted_at timestamptz
 );
-CREATE UNIQUE INDEX realmojis_one_active ON realmojis(post_id,reactor_id) WHERE replaced_at IS NULL AND deleted_at IS NULL;
-CREATE INDEX realmojis_post_id ON realmojis(post_id);
+CREATE UNIQUE INDEX IF NOT EXISTS realmojis_one_active ON realmojis(post_id,reactor_id) WHERE replaced_at IS NULL AND deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS realmojis_post_id ON realmojis(post_id);
 
-CREATE TABLE comments (
+CREATE TABLE IF NOT EXISTS comments (
   id varchar(36) PRIMARY KEY,
   post_id varchar(36) NOT NULL REFERENCES posts(id) ON DELETE RESTRICT,
   author_id varchar(36) NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
@@ -199,9 +185,9 @@ CREATE TABLE comments (
   created_at timestamptz NOT NULL,
   deleted_at timestamptz
 );
-CREATE INDEX comments_post_id ON comments(post_id);
+CREATE INDEX IF NOT EXISTS comments_post_id ON comments(post_id);
 
-CREATE TABLE notifications (
+CREATE TABLE IF NOT EXISTS notifications (
   id varchar(36) PRIMARY KEY,
   user_id varchar(36) NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
   posting_window_id varchar(36) NOT NULL REFERENCES posting_windows(id) ON DELETE RESTRICT,
@@ -209,20 +195,8 @@ CREATE TABLE notifications (
   UNIQUE(user_id,posting_window_id)
 );
 
-CREATE TABLE ip_bans (
+CREATE TABLE IF NOT EXISTS ip_bans (
   ip text PRIMARY KEY,
   banned_until timestamptz NOT NULL,
   created_at timestamptz NOT NULL DEFAULT clock_timestamp()
 );
-
--- ベンチの解析で不足が分かったインデックス
-CREATE INDEX realmojis_image_id_reactor_id ON realmojis(image_id, reactor_id);
-CREATE INDEX posts_image_id ON posts(image_id);
-CREATE INDEX friendships_user_high_id ON friendships(user_high_id);
-CREATE INDEX friend_requests_requester_recipient ON friend_requests(requester_id, recipient_id);
-CREATE INDEX friend_requests_recipient_status ON friend_requests(recipient_id, status);
-CREATE INDEX users_username_id ON users(username, id);
-CREATE INDEX login_sessions_token_hash ON login_sessions(token_hash);
-CREATE INDEX login_sessions_user_id ON login_sessions(user_id);
-CREATE INDEX block_relations_blocked_id ON block_relations(blocked_id);
-CREATE INDEX follows_followee_id ON follows(followee_id);
