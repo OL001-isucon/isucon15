@@ -46,6 +46,7 @@ take_db_metrics() {
 collect_db() {
   on "$DB_HOST" "cat /tmp/db-vmstat.txt 2>/dev/null" > "$dir/db-vmstat.txt" || true
   on "$DB_HOST" "cat /tmp/db-waits.txt 2>/dev/null" > "$dir/db-waits.txt" || true
+  on "$DB_HOST" "cat /tmp/db-activity.txt 2>/dev/null" > "$dir/db-activity.txt" || true
   {
     if [ -s "$dir/db-vmstat.txt" ]; then
       # 列名から位置を引く。vmstat の 1 行目は起動からの平均なので飛ばす
