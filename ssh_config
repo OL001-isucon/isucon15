@@ -13,7 +13,7 @@ Host europe1
 Host america1
   HostName 52.193.83.85
 
-Host america1
+Host asia2
   HostName 18.176.131.35
 
 Host router
