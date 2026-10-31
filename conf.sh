@@ -52,4 +52,4 @@ PULL_EXCLUDES=(
 
 # ポータルの負荷走行の依頼。.portal-auth が無ければボタンを手で押す
 PORTAL_URL=https://portal.isucon.net
-PORTAL_BENCH_BODY='\x20\x28'
+PORTAL_BENCH_BODY='\x08\x28'
