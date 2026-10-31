@@ -11,7 +11,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/jmoiron/sqlx"
 	"github.com/labstack/echo/v5"
 )
 
@@ -45,14 +44,15 @@ func getImageHandler(h *HandlerContext) echo.HandlerFunc {
 		// リージョン間は 1 往復 100ms なので、鍵と削除状態を 1 回で取得する。本体は読まない
 		ctx := c.Request().Context()
 		var object struct {
-			SecretKeyHash string  `db:"secret_key_hash"`
-			MediaType     string  `db:"media_type"`
-			OriginRegion  *string `db:"origin_region"`
-			OnDisk        bool    `db:"on_disk"`
-			Available     bool    `db:"available"`
+			SecretKeyHash string    `db:"secret_key_hash"`
+			MediaType     string    `db:"media_type"`
+			OriginRegion  *string   `db:"origin_region"`
+			OnDisk        bool      `db:"on_disk"`
+			CreatedAt     time.Time `db:"created_at"`
+			Available     bool      `db:"available"`
 		}
 		err = h.DB.GetContext(ctx, &object, `
-   SELECT u.secret_key_hash, i.media_type, i.origin_region, i.data IS NULL AS on_disk,
+   SELECT u.secret_key_hash, i.media_type, i.origin_region, i.on_disk, i.created_at,
      COALESCE(u.profile_image_id = i.id, false)
      OR EXISTS (
        SELECT 1 FROM posts p
@@ -64,7 +64,7 @@ func getImageHandler(h *HandlerContext) echo.HandlerFunc {
        JOIN users author ON author.id = p.author_id AND author.status = 'active'
        WHERE r.image_id = i.id AND r.reactor_id = u.id AND r.replaced_at IS NULL AND r.deleted_at IS NULL
      ) AS available
-   FROM image_objects i JOIN users u ON u.id = i.owner_user_id
+   FROM image_meta i JOIN users u ON u.id = i.owner_user_id
    WHERE i.id = $1 AND u.status = 'active'
   `, input.ImageID)
 		if errors.Is(err, sql.ErrNoRows) {
@@ -89,7 +89,7 @@ func getImageHandler(h *HandlerContext) echo.HandlerFunc {
 		if object.OnDisk {
 			data, err = h.Images.LoadNew(ctx, input.ImageID, object.OriginRegion)
 		} else {
-			data, err = loadInitialImage(ctx, h, input.ImageID)
+			data, err = loadInitialImage(ctx, h, input.ImageID, object.CreatedAt)
 		}
 		if err != nil {
 			return err
@@ -99,46 +99,59 @@ func getImageHandler(h *HandlerContext) echo.HandlerFunc {
 }
 
 // 初期画像は中身が変わらないので、一度読んだら手元の控えから返す
-func loadInitialImage(ctx context.Context, h *HandlerContext, imageID string) ([]byte, error) {
+// created_at を渡してパーティションを 1 つに絞る
+func loadInitialImage(ctx context.Context, h *HandlerContext, imageID string, createdAt time.Time) ([]byte, error) {
 	if data, ok := h.Images.LoadCached(imageID); ok {
 		return data, nil
 	}
 	var data []byte
-	if err := h.DB.GetContext(ctx, &data, `SELECT data FROM image_objects WHERE id = $1`, imageID); err != nil {
+	if err := h.DB.GetContext(ctx, &data, `SELECT data FROM image_objects WHERE id = $1 AND created_at = $2`, imageID, createdAt); err != nil {
 		return nil, err
 	}
 	h.Images.SaveCached(imageID, data)
 	return data, nil
 }
 
-// loadInitialImages は控えに無い分だけをまとめて DB から読む
-func loadInitialImages(ctx context.Context, h *HandlerContext, imageIDs []string) (map[string][]byte, error) {
-	images := make(map[string][]byte, len(imageIDs))
-	missing := make([]string, 0)
-	for _, imageID := range imageIDs {
-		if data, ok := h.Images.LoadCached(imageID); ok {
-			images[imageID] = data
+type initialImageRef struct {
+	ID        string
+	CreatedAt time.Time
+}
+
+// loadInitialImages は控えに無い分だけをまとめて DB から読む。created_at も渡してパーティションを絞る
+func loadInitialImages(ctx context.Context, h *HandlerContext, refs []initialImageRef) (map[string][]byte, error) {
+	images := make(map[string][]byte, len(refs))
+	missingIDs := make([]string, 0)
+	missingCreatedAt := make([]time.Time, 0)
+	for _, ref := range refs {
+		if data, ok := h.Images.LoadCached(ref.ID); ok {
+			images[ref.ID] = data
 		} else {
-			missing = append(missing, imageID)
+			missingIDs = append(missingIDs, ref.ID)
+			missingCreatedAt = append(missingCreatedAt, ref.CreatedAt)
 		}
 	}
-	if len(missing) == 0 {
+	if len(missingIDs) == 0 {
 		return images, nil
 	}
-	query, args, err := sqlx.In(`SELECT id, data FROM image_objects WHERE id IN (?)`, missing)
-	if err != nil {
-		return nil, err
+	// created_at = ANY(...) では generic plan でパーティションが絞られないので、月 (パーティションの単位) ごとに範囲で引く
+	byMonth := map[time.Time][]string{}
+	for i, id := range missingIDs {
+		t := missingCreatedAt[i].UTC()
+		month := time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, time.UTC)
+		byMonth[month] = append(byMonth[month], id)
 	}
-	var rows []struct {
-		ID   string `db:"id"`
-		Data []byte `db:"data"`
-	}
-	if err := h.DB.SelectContext(ctx, &rows, h.DB.Rebind(query), args...); err != nil {
-		return nil, err
-	}
-	for _, row := range rows {
-		images[row.ID] = row.Data
-		h.Images.SaveCached(row.ID, row.Data)
+	for month, ids := range byMonth {
+		var rows []struct {
+			ID   string `db:"id"`
+			Data []byte `db:"data"`
+		}
+		if err := h.DB.SelectContext(ctx, &rows, `SELECT id, data FROM image_objects WHERE id = ANY($1) AND created_at >= $2 AND created_at < $3`, ids, month, month.AddDate(0, 1, 0)); err != nil {
+			return nil, err
+		}
+		for _, row := range rows {
+			images[row.ID] = row.Data
+			h.Images.SaveCached(row.ID, row.Data)
+		}
 	}
 	return images, nil
 }
