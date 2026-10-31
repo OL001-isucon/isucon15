@@ -34,7 +34,14 @@ func NewServer(config *Config) *echo.Echo {
 	if err != nil {
 		panic("failed to open database: " + err.Error())
 	}
-	db.SetMaxOpenConns(30)
+	// 利用者のほぼ全員が asia にいる。DB の max_connections は 100 なので、余裕を残して配分する
+	maxConns := 15
+	if config.Region == "asia" {
+		maxConns = 60
+	}
+	db.SetMaxOpenConns(maxConns)
+	// 既定の 2 本だと接続を毎回張り直す。リージョン間では TLS の往復が重い
+	db.SetMaxIdleConns(maxConns)
 	// localhost:6060/debug/vars で接続プールの待ちを確認する
 	expvar.Publish("db_stats", expvar.Func(func() any { return db.Stats() }))
 	err = db.Ping()
