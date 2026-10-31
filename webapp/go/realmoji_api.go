@@ -75,38 +75,47 @@ func replaceRealMojiHandler(h *HandlerContext) echo.HandlerFunc {
 		if actor == post.AuthorID {
 			return NewAPIError(http.StatusForbidden, "interaction_forbidden")
 		}
-		imageID := uuid.NewString()
-		if err := h.Images.SaveNew(imageID, data); err != nil {
-			return err
+		// 読み取りは users の行ロックを取る前に済ませる。以前はロック後に閲覧可否 (6 往復) と
+		// 自分の取得を行っていて、europe / america からだと著者の行を 1 秒以上握っていた。
+		// 著者の行は人気の投稿ほど他の RealMoji や友達申請と競合する
+		user, err := getUser(ctx, h.DB, actor)
+		if errors.Is(err, sql.ErrNoRows) {
+			return NewAPIError(http.StatusNotFound, "relationship_not_found")
 		}
-		tx, err := beginRelationshipTx(ctx, h.DB, actor, post.AuthorID)
 		if err != nil {
 			return err
 		}
-		defer tx.Rollback()
-		allowed, err := canViewPost(ctx, tx, actor, post.ID)
+		allowed, err := canViewPost(ctx, h.DB, actor, post.ID)
 		if err != nil {
 			return err
 		}
 		if !allowed {
 			return NewAPIError(http.StatusForbidden, "interaction_forbidden")
 		}
-		if _, err := tx.ExecContext(ctx, `UPDATE realmojis SET replaced_at=clock_timestamp() WHERE post_id=$1 AND reactor_id=$2 AND replaced_at IS NULL AND deleted_at IS NULL`, post.ID, actor); err != nil {
+		imageID := uuid.NewString()
+		if err := h.Images.SaveNew(imageID, data); err != nil {
 			return err
 		}
+		tx, err := h.DB.BeginTxx(ctx, nil)
+		if err != nil {
+			return err
+		}
+		defer tx.Rollback()
+		// 画像の行は users 行と競合しないので、ロックの前に入れておく (失敗時は tx ごと戻る)
 		if _, err := tx.ExecContext(ctx, `INSERT INTO image_objects(id,owner_user_id,origin_region,media_type) VALUES($1,$2,$3,'image/jpeg')`, imageID, actor, h.Config.Region); err != nil {
 			return err
 		}
-		id := uuid.NewString()
-		if _, err := tx.ExecContext(ctx, `INSERT INTO realmojis(id,post_id,reactor_id,image_id,reaction_type,created_at) VALUES($1,$2,$3,$4,$5,clock_timestamp())`, id, post.ID, actor, imageID, input.ReactionType); err != nil {
+		if err := lockRelationshipUsers(ctx, tx, actor, post.AuthorID); err != nil {
 			return err
 		}
-		reaction, err := getRealMoji(ctx, tx, id)
-		if err != nil {
+		if _, err := tx.ExecContext(ctx, `UPDATE realmojis SET replaced_at=clock_timestamp() WHERE post_id=$1 AND reactor_id=$2 AND replaced_at IS NULL AND deleted_at IS NULL`, post.ID, actor); err != nil {
 			return err
 		}
-		user, err := getUser(ctx, tx, actor)
-		if err != nil {
+		var reaction RealMoji
+		if err := tx.GetContext(ctx, &reaction, `
+   INSERT INTO realmojis(id,post_id,reactor_id,image_id,reaction_type,created_at) VALUES($1,$2,$3,$4,$5,clock_timestamp())
+   RETURNING id, post_id, reactor_id, image_id, reaction_type, created_at, replaced_at, deleted_at
+  `, uuid.NewString(), post.ID, actor, imageID, input.ReactionType); err != nil {
 			return err
 		}
 		if err := tx.Commit(); err != nil {
