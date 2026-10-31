@@ -142,6 +142,7 @@ for host in "${APP_HOSTS[@]}"; do
   pprof_pids+=($!)
 done
 take_pool_metrics "${APP_HOSTS[0]}" > /dev/null 2>&1 &
+pprof_pids+=($!)
 take_db_metrics > /dev/null 2>&1 &
 pprof_pids+=($!)
 

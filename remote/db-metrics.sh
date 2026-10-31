@@ -24,7 +24,7 @@ for ((i = 0; i < seconds; i++)); do
   sudo -u postgres psql -qAt -F '|' -d "$DB_NAME" -c "
     SELECT to_char(clock_timestamp(), 'HH24:MI:SS'), state, coalesce(wait_event_type, 'running'), count(*),
            round(max(extract(epoch FROM clock_timestamp() - xact_start)) * 1000),
-           left(regexp_replace(query, '\s+', ' ', 'g'), 100)
+           left(regexp_replace(query, '\s+', ' ', 'g'), 100), coalesce(host(client_addr), 'local')
     FROM pg_stat_activity
     WHERE datname = '$DB_NAME' AND state <> 'idle' AND pid <> pg_backend_pid()
     GROUP BY 2, 3, 6, 7
