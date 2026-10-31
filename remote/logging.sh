@@ -30,7 +30,7 @@ log_format ltsv "time:\$time_local"
                 "\treqtime:\$request_time"
                 "\tapptime:\$upstream_response_time"
                 "\tvhost:\$host";
-access_log $ACCESS_LOG ltsv;
+access_log $ACCESS_LOG ltsv buffer=64k flush=1s;
 EOF
   else
     rm -f "$NGINX_CONF"
