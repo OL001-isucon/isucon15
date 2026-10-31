@@ -29,8 +29,8 @@ func ConfigFromEnv() *Config {
 		DBUser:     envOrDefault("ISUREAL_DB_USER", "isureal"),
 		DBPassword: envOrDefault("ISUREAL_DB_PASSWORD", "isureal"),
 		DBName:     envOrDefault("ISUREAL_DB_NAME", "isureal"),
-		// debug は成功した GET で、ログの 7 割を占める。不正アクセスの記録は info 以上に残る
-		LogLevel: envOrDefault("ISUREAL_LOG_LEVEL", "info"),
+		// アクションログは CPU を使うので既定で切る。不正アクセスの判定はログに依存しない
+		LogLevel: envOrDefault("ISUREAL_LOG_LEVEL", "off"),
 		ImageDir: envOrDefault("ISUREAL_IMAGE_DIR", "/home/isucon/image-cache"),
 	}
 }

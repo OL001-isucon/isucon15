@@ -40,8 +40,9 @@ apply_config() {
 }
 
 restart_app() {
-  # asia2 は初期状態でアプリと監視が止まっている。再起動後の追試でも動くよう自動起動にする
-  on "$1" "sudo systemctl enable -q $APP_SERVICE $GUARD_SERVICE && sudo systemctl restart $APP_SERVICE && sudo systemctl start $GUARD_SERVICE"
+  # asia2 は初期状態でアプリが止まっている。再起動後の追試でも動くよう自動起動にする
+  # 不正アクセスの判定はアプリの中で行うので、ログを読む監視は止める
+  on "$1" "sudo systemctl enable -q $APP_SERVICE && sudo systemctl restart $APP_SERVICE && sudo systemctl disable -q --now $GUARD_SERVICE"
 }
 
 [ "${#APP_HOSTS[@]}" -eq 0 ] || run_parallel build_app "${APP_HOSTS[@]}"

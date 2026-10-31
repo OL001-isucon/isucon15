@@ -35,8 +35,6 @@ func NewServer(config *Config) *echo.Echo {
 	e := echo.New()
 	e.IPExtractor = extractClientIP
 
-	e.Use(ActionLogMiddleware(config.LogLevel, os.Stdout))
-	e.Use(middleware.Recover())
 	e.HTTPErrorHandler = APIErrorHandler
 
 	db, err := sqlx.Open("pgx", config.DatabaseDSN())
@@ -60,6 +58,9 @@ func NewServer(config *Config) *echo.Echo {
 	if err != nil {
 		panic("failed to ping database: " + err.Error())
 	}
+
+	e.Use(ActionLogMiddleware(config.LogLevel, os.Stdout, NewAbuseGuard(db)))
+	e.Use(middleware.Recover())
 
 	handlerContext := &HandlerContext{
 		DB:            db,

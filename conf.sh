@@ -7,6 +7,7 @@ HOSTS=(asia1 europe1 america1 asia2)
 # asia2 はルーターから直接届かないので、asia1 の nginx が振り分ける
 WEB_HOSTS=(asia1 europe1 america1)
 APP_HOSTS=(asia1 europe1 america1 asia2)
+# 元の監視。判定はアプリへ移したので deploy.sh が止める
 GUARD_SERVICE=isureal-guard.service
 DB_HOST=asia2
 
