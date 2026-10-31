@@ -158,13 +158,13 @@ func getRealMojisHandler(h *HandlerContext) echo.HandlerFunc {
 		if err != nil {
 			return err
 		}
+		hasMore := len(reactions) > 50
+		if hasMore {
+			reactions = reactions[:50]
+		}
 		items := make([]replaceRealMojiResponse, 0, len(reactions))
 		for _, reaction := range reactions {
 			items = append(items, newRealMojiResponse(reaction.RealMoji, reaction.Reactor))
-		}
-		hasMore := len(items) > 50
-		if hasMore {
-			items = items[:50]
 		}
 		return c.JSON(http.StatusOK, getRealMojisResponse{Items: items, HasMore: hasMore})
 	}

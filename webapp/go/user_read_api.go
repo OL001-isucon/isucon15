@@ -97,17 +97,23 @@ func searchUsersHandler(h *HandlerContext) echo.HandlerFunc {
 			return err
 		}
 		// 全ユーザーを読まないよう DB で絞る。比較は下の Go の処理が正で、search_text は同じ正規化の値を持つ
+		// search_text が NULL の行は無条件に通すので、その数だけ LIMIT を増やす
 		var users []User
-		if err := h.DB.SelectContext(ctx, &users, `SELECT `+strings.Join(userColumns, ", ")+` FROM users WHERE status='active' AND id<>$1 AND ($2='' OR (username,id)>($2,$3)) AND (search_text IS NULL OR strpos(search_text, $4) > 0) ORDER BY username, id LIMIT $5`, viewer, input.BeforeUsername, input.BeforeID, query, 51+len(blocked)); err != nil {
+		if err := h.DB.SelectContext(ctx, &users, `SELECT `+strings.Join(userColumns, ", ")+` FROM users WHERE status='active' AND id<>$1 AND ($2='' OR (username,id)>($2,$3)) AND (search_text IS NULL OR strpos(search_text, $4) > 0) ORDER BY username, id LIMIT $5::bigint + (SELECT count(*) FROM users WHERE search_text IS NULL)`, viewer, input.BeforeUsername, input.BeforeID, query, 51+len(blocked)); err != nil {
 			return err
 		}
 		items := make([]relationshipUserResponse, 0)
+		hasMore := false
 		for _, user := range users {
 			if !strings.Contains(normalizeSearchText(user.Username), query) && !strings.Contains(normalizeSearchText(user.DisplayName), query) {
 				continue
 			}
 			if blocked[user.ID] {
 				continue
+			}
+			if len(items) == 50 {
+				hasMore = true
+				break
 			}
 			if err := user.setImageKey(); err != nil {
 				return err
@@ -116,13 +122,6 @@ func searchUsersHandler(h *HandlerContext) echo.HandlerFunc {
 				user.Bio = ""
 			}
 			items = append(items, newRelationshipUserResponse(user))
-			if len(items) == 51 {
-				break
-			}
-		}
-		hasMore := len(items) > 50
-		if hasMore {
-			items = items[:50]
 		}
 		return c.JSON(http.StatusOK, searchUsersResponse{Items: items, HasMore: hasMore})
 	}
