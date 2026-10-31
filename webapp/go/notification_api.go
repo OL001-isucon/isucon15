@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/labstack/echo/v5"
 )
 
@@ -52,14 +53,17 @@ func getNotificationsHandler(h *HandlerContext) echo.HandlerFunc {
 			if user.Region != session.Region {
 				return nil
 			}
+			// 通知の中身は「期間 ID、リージョン、期間の開始時刻」と利用者ごとの通知 ID だけなので、
+			// 通知行を持たず、接続後に始まってまだ開いている期間から組み立てる。通知 ID は期間と利用者から決定的に作る
 			var notification getNotificationsResponse
 			err = h.DB.GetContext(ctx, &notification, `
-    SELECT n.id, n.posting_window_id, w.region, n.created_at
-    FROM notifications n JOIN posting_windows w ON w.id = n.posting_window_id
-    WHERE n.user_id = $1 AND n.created_at > $2 AND w.ended_at IS NULL
-    ORDER BY n.created_at, n.id LIMIT 1
-   `, userID, connectedAt)
+    SELECT w.id AS posting_window_id, w.region, w.starts_at AS created_at
+    FROM posting_windows w
+    WHERE w.region = $1 AND w.starts_at > $2 AND w.ended_at IS NULL
+    ORDER BY w.starts_at LIMIT 1
+   `, session.Region, connectedAt)
 			if err == nil {
+				notification.ID = uuid.NewSHA1(uuid.NameSpaceOID, []byte(notification.PostingWindowID+":"+userID)).String()
 				data, err := json.Marshal(notification)
 				if err != nil {
 					c.Logger().Error("failed to encode notification", "error", err)
