@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/jmoiron/sqlx"
 	"github.com/labstack/echo/v5"
 )
 
@@ -108,4 +109,36 @@ func loadInitialImage(ctx context.Context, h *HandlerContext, imageID string) ([
 	}
 	h.Images.SaveCached(imageID, data)
 	return data, nil
+}
+
+// loadInitialImages は控えに無い分だけをまとめて DB から読む
+func loadInitialImages(ctx context.Context, h *HandlerContext, imageIDs []string) (map[string][]byte, error) {
+	images := make(map[string][]byte, len(imageIDs))
+	missing := make([]string, 0)
+	for _, imageID := range imageIDs {
+		if data, ok := h.Images.LoadCached(imageID); ok {
+			images[imageID] = data
+		} else {
+			missing = append(missing, imageID)
+		}
+	}
+	if len(missing) == 0 {
+		return images, nil
+	}
+	query, args, err := sqlx.In(`SELECT id, data FROM image_objects WHERE id IN (?)`, missing)
+	if err != nil {
+		return nil, err
+	}
+	var rows []struct {
+		ID   string `db:"id"`
+		Data []byte `db:"data"`
+	}
+	if err := h.DB.SelectContext(ctx, &rows, h.DB.Rebind(query), args...); err != nil {
+		return nil, err
+	}
+	for _, row := range rows {
+		images[row.ID] = row.Data
+		h.Images.SaveCached(row.ID, row.Data)
+	}
+	return images, nil
 }

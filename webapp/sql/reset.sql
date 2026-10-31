@@ -30,7 +30,8 @@ WHERE NOT EXISTS (SELECT 1 FROM image_objects i WHERE i.id = b.id);
 
 UPDATE users u
 SET display_name = i.display_name, bio = i.bio, profile_image_id = i.profile_image_id, region = i.region,
-    account_type = i.account_type, status = i.status, deleted_at = i.deleted_at, updated_at = i.updated_at
+    account_type = i.account_type, status = i.status, deleted_at = i.deleted_at, updated_at = i.updated_at,
+    search_text = NULL
 FROM initial_users i
 WHERE u.id = i.id
   AND (u.display_name, u.bio, u.profile_image_id, u.region, u.account_type, u.status, u.deleted_at, u.updated_at)
