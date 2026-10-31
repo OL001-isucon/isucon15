@@ -110,14 +110,14 @@ func createPostHandler(h *HandlerContext) echo.HandlerFunc {
 			Active    int       `db:"active"`
 			Deleted   int       `db:"deleted"`
 		}
-		// 期間が切り替わった直後は FOR SHARE の再検査で行が消えるので、従来どおり 1 回だけ引き直す
+		// 期間が切り替わった直後は FOR KEY SHARE の再検査で行が消えるので、従来どおり 1 回だけ引き直す
 		const windowQuery = `
    SELECT w.id, w.local_date, w.starts_at,
           (SELECT count(*) FROM posts p JOIN posting_windows d ON d.id = p.posting_window_id
             WHERE p.author_id = $2 AND d.local_date = w.local_date AND p.deleted_at IS NULL) AS active,
           (SELECT count(*) FROM posts p JOIN posting_windows d ON d.id = p.posting_window_id
             WHERE p.author_id = $2 AND d.local_date = w.local_date AND p.deleted_at IS NOT NULL) AS deleted
-   FROM posting_windows w WHERE w.region = $1 AND w.ended_at IS NULL FOR SHARE OF w
+   FROM posting_windows w WHERE w.region = $1 AND w.ended_at IS NULL FOR KEY SHARE OF w
   `
 		err = tx.GetContext(ctx, &window, windowQuery, user.Region, userID)
 		if errors.Is(err, sql.ErrNoRows) {
