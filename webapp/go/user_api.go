@@ -236,6 +236,10 @@ func updateMeHandler(h *HandlerContext) echo.HandlerFunc {
 		if err := tx.Commit(); err != nil {
 			return err
 		}
+		// リージョンを移ると、元のリージョンの通知の接続を閉じる
+		if input.Region != nil && *input.Region != session.Region {
+			h.wakeNotifications(session.Region)
+		}
 		return c.JSON(http.StatusOK, updateMeResponse(newGetMeResponse(user)))
 	}
 }

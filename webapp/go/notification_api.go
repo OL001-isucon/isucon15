@@ -18,6 +18,9 @@ type getNotificationsResponse struct {
 	CreatedAt       time.Time `json:"createdAt" db:"created_at"`
 }
 
+// 起こす知らせが届かなかったときの確認の間隔
+const notificationRecheckInterval = 5 * time.Second
+
 func getNotificationsHandler(h *HandlerContext) echo.HandlerFunc {
 	return func(c *echo.Context) error {
 		ctx := c.Request().Context()
@@ -34,9 +37,11 @@ func getNotificationsHandler(h *HandlerContext) echo.HandlerFunc {
 		if err := controller.Flush(); err != nil {
 			return nil
 		}
-		ticker := time.NewTicker(500 * time.Millisecond)
+		ticker := time.NewTicker(notificationRecheckInterval)
 		defer ticker.Stop()
 		for {
+			// DB を確認する前に取得する。確認の直後に Wake されても取りこぼさない
+			changed := h.Notifications.Changed()
 			user, err := getUser(ctx, h.DB, userID)
 			if err != nil {
 				if !errors.Is(err, sql.ErrNoRows) && ctx.Err() == nil {
@@ -75,6 +80,7 @@ func getNotificationsHandler(h *HandlerContext) echo.HandlerFunc {
 			select {
 			case <-ctx.Done():
 				return nil
+			case <-changed:
 			case <-ticker.C:
 			}
 		}
