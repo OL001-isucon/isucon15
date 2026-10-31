@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"errors"
 	"net/http"
-	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -50,11 +49,10 @@ func createCommentHandler(h *HandlerContext) echo.HandlerFunc {
 			return err
 		}
 		defer tx.Rollback()
-		for _, id := range slices.Compact([]string{min(actor, post.AuthorID), max(actor, post.AuthorID)}) {
-			var lockedID string
-			if err := tx.GetContext(ctx, &lockedID, `SELECT id FROM users WHERE id=$1 FOR NO KEY UPDATE`, id); err != nil {
-				return err
-			}
+		// 守りたいのは「判定した投稿が途中で消えたり公開範囲が変わったりしないこと」なので、
+		// 投稿者の users 行ではなく投稿の行を共有ロックする。編集・削除の UPDATE posts はこれと競合して待つ
+		if err := lockPostShared(ctx, tx, post.ID); err != nil {
+			return err
 		}
 		allowed, err := canComment(ctx, tx, actor, post.ID)
 		if err != nil {
@@ -143,10 +141,7 @@ func deleteCommentHandler(h *HandlerContext) echo.HandlerFunc {
 			return err
 		}
 		defer tx.Rollback()
-		var lockedID string
-		if err := tx.GetContext(ctx, &lockedID, `SELECT id FROM users WHERE id=$1 FOR NO KEY UPDATE`, actor); err != nil {
-			return err
-		}
+		// コメント行の FOR UPDATE で足りるので、users 行はロックしない
 		var record struct {
 			AuthorID     string `db:"author_id"`
 			PostAuthorID string `db:"post_author_id"`

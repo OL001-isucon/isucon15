@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"net/http"
 	"time"
 
 	"github.com/jmoiron/sqlx"
@@ -55,6 +56,18 @@ func getPost(ctx context.Context, db sqlx.QueryerContext, postID string) (Post, 
   WHERE p.id = $1 AND p.deleted_at IS NULL
  `, postID)
 	return post, err
+}
+
+// lockPostShared は投稿の行を FOR SHARE で押さえる。コメントや RealMoji の判定から書き込みまでの間に
+// 投稿が削除されたり公開範囲が変わったりしないようにする。FOR SHARE 同士は競合しないので、
+// 同じ投稿への反応が互いに待つことはない。消えていれば ErrNoRows
+func lockPostShared(ctx context.Context, tx *sqlx.Tx, postID string) error {
+	var lockedID string
+	err := tx.GetContext(ctx, &lockedID, `SELECT id FROM posts WHERE id = $1 AND deleted_at IS NULL FOR SHARE`, postID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return NewAPIError(http.StatusForbidden, "interaction_forbidden")
+	}
+	return err
 }
 
 type PostWithAuthor struct {
