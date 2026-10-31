@@ -1,15 +1,20 @@
-# 当日に HostName を埋める
 Host *
   User isucon
   StrictHostKeyChecking accept-new
   ServerAliveInterval 15
   ConnectTimeout 10
 
-Host isu1
-  HostName 0.0.0.1
+Host asia1
+  HostName 35.79.166.34
 
-Host isu2
-  HostName 0.0.0.2
+Host europe1
+  HostName 35.79.4.161
 
-Host isu3
-  HostName 0.0.0.3
+Host america1
+  HostName 52.193.83.85
+
+Host america1
+  HostName 18.176.131.35
+
+Host router
+  HostName 54.168.222.198
