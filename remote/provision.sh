@@ -3,7 +3,6 @@
 set -euo pipefail
 
 ALP_VERSION=1.0.22
-SQLDEF_VERSION=3.11.29
 
 export DEBIAN_FRONTEND=noninteractive
 apt-get -o DPkg::Lock::Timeout=120 update -qq
@@ -18,9 +17,6 @@ curl -fsSL -o "$work/checksums.txt" "$alp_base/alp_${ALP_VERSION}_checksums.txt"
 (cd "$work" && grep ' alp_linux_amd64.tar.gz$' checksums.txt | sha256sum -c --quiet -)
 tar -xzf "$work/alp_linux_amd64.tar.gz" -C /usr/local/bin alp
 
-curl -fsSL -o "$work/psqldef.tar.gz" \
-  "https://github.com/sqldef/sqldef/releases/download/v$SQLDEF_VERSION/psqldef_linux_amd64.tar.gz"
-tar -xzf "$work/psqldef.tar.gz" -C /usr/local/bin psqldef
 
 sysctl -q -w net.core.somaxconn=10000 net.ipv4.ip_local_port_range='10000 65535' || true
 cat > /etc/sysctl.d/99-isucon.conf <<'EOF'
@@ -29,4 +25,3 @@ net.ipv4.ip_local_port_range = 10000 65535
 EOF
 
 /usr/local/bin/alp --version
-/usr/local/bin/psqldef --version

@@ -18,7 +18,7 @@ GO_BIN_DIR=/home/isucon/local/go/bin
 # DB
 DB_USER=isureal
 DB_NAME=isureal
-SCHEMA_FILES=(webapp/sql/001-schema.sql webapp/sql/003-initial-snapshot.sql)
+SQL_DIR=webapp/sql
 
 # ログ
 ACCESS_LOG=/var/log/nginx/access_ltsv.log

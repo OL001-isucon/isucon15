@@ -13,10 +13,9 @@ git fetch -q origin
 commit=$(git rev-parse --short "$ref")
 echo "== deploy $ref ($commit) to ${HOSTS[*]}"
 
-sql_dir=$(dirname "${SCHEMA_FILES[0]}")
 archive=$(mktemp)
 trap 'rm -f "$archive"' EXIT
-git archive "$ref" "$APP_DIR" "$sql_dir" > "$archive"
+git archive "$ref" "$APP_DIR" "$SQL_DIR" > "$archive"
 
 build_app() {
   local host=$1
@@ -24,7 +23,7 @@ build_app() {
   on "$host" "find $APP_DIR -name '*.go' -delete"
   on "$host" "tar xf -" < "$archive"
   # Windows でコミットすると実行権限が落ち、/initialize の init.sh が動かなくなる
-  on "$host" "find $APP_DIR $sql_dir -name '*.sh' -exec chmod +x {} +"
+  on "$host" "find $APP_DIR $SQL_DIR -name '*.sh' -exec chmod +x {} +"
   on "$host" "cd $APP_DIR && PATH=$GO_BIN_DIR:\$PATH go build -o $APP_BIN $APP_MAIN_PKG"
   on "$host" "echo '$ref $commit' > ~/DEPLOYED"
 }
