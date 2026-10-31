@@ -4,4 +4,16 @@ output: count,1xx,2xx,3xx,4xx,5xx,method,uri,min,avg,max,sum,p99
 # ID などが入るパスはここに追記して 1 行にまとめる
 matching_groups:
   - ^/assets/
-  - ^/images/
+  - ^/api/users/[^/]+$
+  - ^/api/posts/[^/]+/comments$
+  - ^/api/posts/[^/]+/realmojis$
+  - ^/api/posts/[^/]+$
+  - ^/api/memories/[^/]+$
+  - ^/api/comments/[^/]+$
+  - ^/api/realmojis/[^/]+$
+  - ^/api/images/[^/]+$
+  - ^/api/friend-requests/[^/]+/[^/]+$
+  - ^/api/friendships/[^/]+$
+  - ^/api/follows/[^/]+$
+  - ^/api/blocks/[^/]+$
+  - ^/api/admin/users/[^/]+/certification$

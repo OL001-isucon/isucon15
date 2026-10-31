@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # サーバーのコードと設定をリポジトリへ取り込んでコミットする。push はしない
-# webapp は APP_HOST(未設定なら HOSTS の先頭)から、設定は全サーバーから servers/<host>/ に取り込む
+# webapp は対象の先頭のサーバーから、設定は全対象から servers/<host>/ に取り込む
 # usage: scripts/pull.sh [-s host]
 source "$(dirname "$0")/lib.sh"
 
 cd "$ROOT"
 
-webapp_host=${APP_HOST:-${HOSTS[0]}}
+webapp_host=${HOSTS[0]}
 
 find_excludes=""
 for pattern in "${PULL_EXCLUDES[@]}"; do
@@ -27,7 +27,7 @@ for host in "${HOSTS[@]}"; do
   mkdir -p "servers/$host"
   on "$host" "cd / && { sudo tar czf - --dereference --ignore-failed-read --warning=no-file-changed \
     --exclude='*.key' --exclude='*.pem' --exclude='*.crt' \
-    --exclude='etc/nginx/conf.d/00-isucon-ltsv.conf' \
+    --exclude='etc/nginx/conf.d/00-isucon-ltsv.conf' --exclude='etc/postgresql/16/main/conf.d/zz-isucon-stats.conf' \
     etc/nginx etc/postgresql etc/sysctl.d etc/systemd/system/$APP_SERVICE; true; }" | tar xzf - -C "servers/$host"
 done
 

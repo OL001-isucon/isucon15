@@ -7,5 +7,5 @@ mode=${1:?usage: scripts/logging.sh [-s host] on|off}
 
 for host in "${HOSTS[@]}"; do
   echo "== $host"
-  on "$host" "sudo ACCESS_LOG=$ACCESS_LOG SLOW_LOG=$SLOW_LOG bash -s $mode" < "$ROOT/remote/logging.sh"
+  on "$host" "sudo ACCESS_LOG=$ACCESS_LOG DB_NAME=$DB_NAME bash -s $mode" < "$ROOT/remote/logging.sh"
 done

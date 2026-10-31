@@ -9,7 +9,7 @@ tar xf /tmp/config.tar --strip-components=2 -C "$work"
 cd "$work"
 
 nginx_changed=false
-mysql_changed=false
+postgres_changed=false
 
 while IFS= read -r file; do
   target=/$file
@@ -19,7 +19,7 @@ while IFS= read -r file; do
   echo "updated $target"
   case "$target" in
     /etc/nginx/*) nginx_changed=true ;;
-    /etc/mysql/*) mysql_changed=true ;;
+    /etc/postgresql/*) postgres_changed=true ;;
   esac
 done < <(find etc -type f)
 
@@ -28,6 +28,6 @@ if [ "$nginx_changed" = true ]; then
   nginx -t -q
   systemctl reload nginx
 fi
-if [ "$mysql_changed" = true ]; then
-  systemctl restart mysql
+if [ "$postgres_changed" = true ]; then
+  systemctl restart postgresql@16-main
 fi

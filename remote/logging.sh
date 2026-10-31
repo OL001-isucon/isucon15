@@ -4,11 +4,17 @@ set -euo pipefail
 
 mode=${1:?usage: logging.sh on|off}
 ACCESS_LOG=${ACCESS_LOG:-/var/log/nginx/access_ltsv.log}
-SLOW_LOG=${SLOW_LOG:-/var/log/mysql/mysql-slow.log}
+DB_NAME=${DB_NAME:-isureal}
 NGINX_CONF=/etc/nginx/conf.d/00-isucon-ltsv.conf
-MYSQL_CONF=/etc/mysql/conf.d/zz-isucon-slow.cnf
+PG_SERVICE=postgresql@16-main
+PG_CONF=/etc/postgresql/16/main/conf.d/zz-isucon-stats.conf
 
-if command -v nginx >/dev/null; then
+pg() {
+  sudo -u postgres psql -qAt -d "$DB_NAME" -c "$1"
+}
+
+# 使っていないサーバーにもパッケージは入っているので、動いているサービスだけを切り替える
+if systemctl is-active -q nginx; then
   if [ "$mode" = on ]; then
     cat > "$NGINX_CONF" <<EOF
 log_format ltsv "time:\$time_local"
@@ -33,20 +39,23 @@ EOF
   systemctl reload nginx
 fi
 
-if command -v mysql >/dev/null; then
+# スロークエリログは bytea の画像をログへ書くので、pg_stat_statements で集計する
+if systemctl is-active -q "$PG_SERVICE"; then
+  loaded=$(pg 'SHOW shared_preload_libraries')
   if [ "$mode" = on ]; then
-    cat > "$MYSQL_CONF" <<EOF
-[mysqld]
-slow_query_log = 1
-slow_query_log_file = $SLOW_LOG
-long_query_time = 0
-EOF
-    touch "$SLOW_LOG"
-    chown mysql:adm "$SLOW_LOG"
-    mysql -e "SET GLOBAL slow_query_log_file = '$SLOW_LOG'; SET GLOBAL long_query_time = 0; SET GLOBAL slow_query_log = 1;"
+    echo "shared_preload_libraries = 'pg_stat_statements'" > "$PG_CONF"
+    # 読み込みには再起動が必要なので、読み込み済みなら再起動しない
+    case "$loaded" in
+      *pg_stat_statements*) ;;
+      *) systemctl restart "$PG_SERVICE" ;;
+    esac
+    pg 'CREATE EXTENSION IF NOT EXISTS pg_stat_statements'
   else
-    rm -f "$MYSQL_CONF"
-    mysql -e "SET GLOBAL slow_query_log = 0;"
+    pg 'DROP EXTENSION IF EXISTS pg_stat_statements'
+    rm -f "$PG_CONF"
+    case "$loaded" in
+      *pg_stat_statements*) systemctl restart "$PG_SERVICE" ;;
+    esac
   fi
 fi
 
