@@ -84,6 +84,14 @@ ALTER TABLE posts ADD COLUMN IF NOT EXISTS like_count integer NOT NULL DEFAULT 0
 - DB は全員で共有しているので、適用した変更はブランチに関係なく全員の環境に効き、自動では戻らない
 - 追加した列やテーブルに初期データとの差が出るなら、`reset.sql` にも戻す処理を入れる
 
+## 画像の保存
+
+初期画像は DB の `image_objects.data` にある。一度読むと、そのサーバーの `/home/isucon/image-cache/cache/` に控えを置く。
+
+新規の画像は `data` が NULL で、本体は受けたサーバーの `/home/isucon/image-cache/new/` に置く。コミット後に他のリージョンへ配り、届いていないときは `origin_region` のサーバーから取得する。`new/` は初期化で全リージョンから消える。
+
+権限と削除の確認は毎回 DB で行う。サーバー間の通信は private IP の `:8080` の `/internal/` を使う。公開 IP はルーターを迂回するので使わない。
+
 ## alp の集約
 
 ID を含むパスは `etc/alp.yml` の `matching_groups` に追記する。次の `bench.sh` から反映される。

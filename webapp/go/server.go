@@ -14,6 +14,7 @@ type HandlerContext struct {
 	DB     *sqlx.DB
 	Config *Config
 	IPBans *IPBanList
+	Images *ImageStore
 }
 
 func NewServer(config *Config) *echo.Echo {
@@ -41,8 +42,15 @@ func NewServer(config *Config) *echo.Echo {
 		DB:     db,
 		Config: config,
 		IPBans: &IPBanList{},
+		Images: NewImageStore(config),
 	}
 	e.Use(IPBanMiddleware(handlerContext))
+
+	// nginx は /api/ だけを転送するので、ここはサーバー間でしか届かない
+	internalOnly := InternalOnlyMiddleware(handlerContext.Images)
+	e.GET("/internal/images/:imageId", getInternalImageHandler(handlerContext), internalOnly)
+	e.PUT("/internal/images/:imageId", putInternalImageHandler(handlerContext), internalOnly)
+	e.POST("/internal/images-reset", resetInternalImagesHandler(handlerContext), internalOnly)
 
 	e.POST("/api/initialize", initializeHandler(handlerContext))
 	e.POST("/api/auth/register", registerHandler(handlerContext))
