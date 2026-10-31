@@ -20,7 +20,7 @@ type getNotificationsResponse struct {
 }
 
 // 起こす知らせが届かなかったときの確認の間隔
-const notificationRecheckInterval = 5 * time.Second
+const notificationRecheckInterval = 60 * time.Second
 
 func getNotificationsHandler(h *HandlerContext) echo.HandlerFunc {
 	return func(c *echo.Context) error {
