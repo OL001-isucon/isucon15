@@ -89,21 +89,22 @@ func registerHandler(h *HandlerContext) echo.HandlerFunc {
 			return err
 		}
 		defer tx.Rollback()
-		// ユーザー名が一意である必要があります。
-		if _, err := tx.ExecContext(ctx, `LOCK TABLE users IN SHARE ROW EXCLUSIVE MODE`); err != nil {
-			return err
-		}
-		var exists bool
-		if err := tx.GetContext(ctx, &exists, `SELECT EXISTS(SELECT 1 FROM users WHERE username = $1)`, input.Username); err != nil {
-			return err
-		}
-		if exists {
-			return NewAPIError(http.StatusConflict, "username_taken")
-		}
+		// ユーザー名が一意である必要があります。ユニークインデックスに任せ、テーブルをロックしない
 		userID := uuid.NewString()
-		if _, err := tx.ExecContext(ctx, `INSERT INTO users (id, username, secret_key_hash, display_name, region) VALUES ($1, $2, $3, $4, $5)`,
-			userID, input.Username, hex.EncodeToString(hash[:]), input.DisplayName, input.Region); err != nil {
+		result, err := tx.ExecContext(ctx, `
+   INSERT INTO users (id, username, secret_key_hash, display_name, region, search_text)
+   VALUES ($1, $2, $3, $4, $5, $6)
+   ON CONFLICT (username) DO NOTHING
+  `, userID, input.Username, hex.EncodeToString(hash[:]), input.DisplayName, input.Region, userSearchText(input.Username, input.DisplayName))
+		if err != nil {
 			return err
+		}
+		inserted, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if inserted == 0 {
+			return NewAPIError(http.StatusConflict, "username_taken")
 		}
 		user, err := getUser(ctx, tx, userID)
 		if err != nil {
@@ -208,7 +209,10 @@ func updateMeHandler(h *HandlerContext) echo.HandlerFunc {
 		}
 		defer tx.Rollback()
 		if input.DisplayName != nil {
-			if _, err := tx.ExecContext(ctx, `UPDATE users SET display_name = $2, updated_at = clock_timestamp() WHERE id = $1`, session.UserID, *input.DisplayName); err != nil {
+			if _, err := tx.ExecContext(ctx, `UPDATE users SET display_name = $2, search_text = NULL, updated_at = clock_timestamp() WHERE id = $1`, session.UserID, *input.DisplayName); err != nil {
+				return err
+			}
+			if err := refreshUserSearchText(ctx, tx, session.UserID); err != nil {
 				return err
 			}
 		}

@@ -23,6 +23,9 @@ func initializeHandler(h *HandlerContext) echo.HandlerFunc {
 		if err := cmd.Run(); err != nil {
 			return err
 		}
+		if err := BackfillUserSearchText(c.Request().Context(), h.DB); err != nil {
+			return err
+		}
 		h.Images.ClearNewInAllRegions()
 
 		// Set language to the implementation language.

@@ -1,12 +1,14 @@
 package isureal
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"net/http"
 	"slices"
 	"strings"
 
+	"github.com/jmoiron/sqlx"
 	"github.com/labstack/echo/v5"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/unicode/norm"
@@ -27,6 +29,50 @@ func normalizeSearchText(value string) string {
 	return norm.NFC.String(cases.Fold().String(norm.NFC.String(value)))
 }
 
+// 名前は多言語で、lower では ß などの折りたたみが再現できないので、Go で正規化した値を DB に持つ
+func userSearchText(username, displayName string) string {
+	return normalizeSearchText(username) + "\n" + normalizeSearchText(displayName)
+}
+
+func refreshUserSearchText(ctx context.Context, db sqlx.ExtContext, userID string) error {
+	var user struct {
+		Username    string `db:"username"`
+		DisplayName string `db:"display_name"`
+	}
+	if err := sqlx.GetContext(ctx, db, &user, `SELECT username, display_name FROM users WHERE id = $1`, userID); err != nil {
+		return err
+	}
+	_, err := db.ExecContext(ctx, `UPDATE users SET search_text = $2 WHERE id = $1`, userID, userSearchText(user.Username, user.DisplayName))
+	return err
+}
+
+// BackfillUserSearchText は初期ユーザーと、reset.sql が名前を戻したユーザーの値を作る
+func BackfillUserSearchText(ctx context.Context, db *sqlx.DB) error {
+	var users []struct {
+		ID          string `db:"id"`
+		Username    string `db:"username"`
+		DisplayName string `db:"display_name"`
+	}
+	if err := db.SelectContext(ctx, &users, `SELECT id, username, display_name FROM users WHERE search_text IS NULL`); err != nil {
+		return err
+	}
+	if len(users) == 0 {
+		return nil
+	}
+	ids := make([]string, 0, len(users))
+	texts := make([]string, 0, len(users))
+	for _, user := range users {
+		ids = append(ids, user.ID)
+		texts = append(texts, userSearchText(user.Username, user.DisplayName))
+	}
+	_, err := db.ExecContext(ctx, `
+   UPDATE users u SET search_text = d.search_text
+   FROM unnest($1::text[], $2::text[]) AS d(id, search_text)
+   WHERE u.id = d.id
+  `, ids, texts)
+	return err
+}
+
 func searchUsersHandler(h *HandlerContext) echo.HandlerFunc {
 	return func(c *echo.Context) error {
 		var input searchUsersRequest
@@ -41,15 +87,20 @@ func searchUsersHandler(h *HandlerContext) echo.HandlerFunc {
 		}
 		ctx := c.Request().Context()
 		viewer := GetSession(c).UserID
-		var users []User
-		if err := h.DB.SelectContext(ctx, &users, `SELECT `+strings.Join(userColumns, ", ")+` FROM users WHERE status='active' AND id<>$1 AND ($2='' OR (username,id)>($2,$3)) ORDER BY username, id`, viewer, input.BeforeUsername, input.BeforeID); err != nil {
-			return err
+		query := normalizeSearchText(input.Q)
+		// NUL は DB に渡せず、名前にも含まれない
+		if strings.ContainsRune(query, 0) {
+			return c.JSON(http.StatusOK, searchUsersResponse{Items: []relationshipUserResponse{}})
 		}
 		blocked, err := getBlockedUserIDs(ctx, h.DB, viewer)
 		if err != nil {
 			return err
 		}
-		query := normalizeSearchText(input.Q)
+		// 全ユーザーを読まないよう DB で絞る。比較は下の Go の処理が正で、search_text は同じ正規化の値を持つ
+		var users []User
+		if err := h.DB.SelectContext(ctx, &users, `SELECT `+strings.Join(userColumns, ", ")+` FROM users WHERE status='active' AND id<>$1 AND ($2='' OR (username,id)>($2,$3)) AND (search_text IS NULL OR strpos(search_text, $4) > 0) ORDER BY username, id LIMIT $5`, viewer, input.BeforeUsername, input.BeforeID, query, 51+len(blocked)); err != nil {
+			return err
+		}
 		items := make([]relationshipUserResponse, 0)
 		for _, user := range users {
 			if !strings.Contains(normalizeSearchText(user.Username), query) && !strings.Contains(normalizeSearchText(user.DisplayName), query) {
