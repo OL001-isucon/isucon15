@@ -105,7 +105,12 @@ func replaceRealMojiHandler(h *HandlerContext) echo.HandlerFunc {
 		if _, err := tx.ExecContext(ctx, `INSERT INTO image_objects(id,owner_user_id,origin_region,media_type) VALUES($1,$2,$3,'image/jpeg')`, imageID, actor, h.Config.Region); err != nil {
 			return err
 		}
-		if err := lockRelationshipUsers(ctx, tx, actor, post.AuthorID); err != nil {
+		// 投稿者や自分の users 行ではなく投稿の行を共有ロックし、同じ投稿への自分の送信だけを advisory lock で直列にする。
+		// 投稿者の行を握ると、その人への友達申請やコメントまで待たせてしまう
+		if err := lockPostShared(ctx, tx, post.ID); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtext($1))`, "realmoji:"+post.ID+":"+actor); err != nil {
 			return err
 		}
 		if _, err := tx.ExecContext(ctx, `UPDATE realmojis SET replaced_at=clock_timestamp() WHERE post_id=$1 AND reactor_id=$2 AND replaced_at IS NULL AND deleted_at IS NULL`, post.ID, actor); err != nil {
@@ -187,10 +192,7 @@ func deleteRealMojiHandler(h *HandlerContext) echo.HandlerFunc {
 			return err
 		}
 		defer tx.Rollback()
-		var lockedID string
-		if err := tx.GetContext(ctx, &lockedID, `SELECT id FROM users WHERE id=$1 FOR NO KEY UPDATE`, actor); err != nil {
-			return err
-		}
+		// RealMoji 行の FOR UPDATE で足りるので、users 行はロックしない
 		var record struct {
 			ReactorID string `db:"reactor_id"`
 			AuthorID  string `db:"author_id"`
