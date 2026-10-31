@@ -68,17 +68,19 @@ func openPostingWindowHandler(h *HandlerContext) echo.HandlerFunc {
   `, windowID, region, localDate, startsAt, startsAt.Add(time.Duration(seconds)*time.Second)); err != nil {
 			return err
 		}
-		if _, err := tx.ExecContext(ctx, `
-   INSERT INTO notifications (id, user_id, posting_window_id, created_at)
-   SELECT gen_random_uuid()::text, id, $2, $3 FROM users WHERE region = $1 AND status = 'active'
-  `, region, windowID, startsAt); err != nil {
-			return err
-		}
 		window, err := getPostingWindow(ctx, tx, windowID)
 		if err != nil {
 			return err
 		}
 		if err := tx.Commit(); err != nil {
+			return err
+		}
+		// 通知の INSERT (数万行、0.4〜0.8 秒) を切り替えのトランザクションに含めると、その間ずっと旧期間の行を握り、
+		// FOR SHARE で待つ投稿作成を全部止めてしまう。切り替えを先に確定してから通知を入れる
+		if _, err := h.DB.ExecContext(ctx, `
+   INSERT INTO notifications (id, user_id, posting_window_id, created_at)
+   SELECT gen_random_uuid()::text, id, $2, $3 FROM users WHERE region = $1 AND status = 'active'
+  `, region, windowID, startsAt); err != nil {
 			return err
 		}
 		h.wakeNotifications(region)
